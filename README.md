@@ -1,6 +1,8 @@
 # Nexus - realtime social game server
 Projekat za predmet Napredne tehnike programiranja, Fakultet tehničkih nauka u Novom Sadu.
 
+Za ocenu 10.
+
 Autor: Vladislav Radović, SV 27/2021
 
 ## Opis problema
