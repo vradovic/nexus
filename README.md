@@ -11,6 +11,10 @@ Izrada multiplayer video igara često zahteva od programera da implementira svoj
 Sa stanovišta programera koji razvija igricu, ovo predstavlja veliki dodatni posao koji je više fokusiran na oblast računarskih mreža, a ne na samu igru. Ovaj posao je većinski moguće generalizovati u vidu servisa koji bi predstavljao socijalni podsistem projekta.
 Servis bi se sastojao od aplikativnog koda za biznis logiku, baze podataka kao skladište, i izloženim api-jem za HTTP/WebSocket komunikaciju sa klijentima. Za jednostavno podešavanje konfiguracije servisa, dostupan je i administratorski korisniči interfejs u vidu veb aplikacije.
 
+Primeri postojećih rešenja:
+- SmartFoxServer (https://www.smartfoxserver.com/)
+- Nakama (https://heroiclabs.com/nakama/)
+
 ## Tehnologije
 
 - Core aplikacija, backend - Rust
