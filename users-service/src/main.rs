@@ -1,24 +1,17 @@
-use axum::{
-    routing::{get, post},
-    Router, Json,
-};
+mod db;
+mod model;
+mod routes;
+
 use std::net::SocketAddr;
 
 #[tokio::main]
 async fn main() {
     println!("Hello, world!");
 
-    let app = Router::new()
-        .route("/health", get(health));
+    let app = routes::app_router();
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
 
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service())
-        .await
-        .unwrap();
-}
-
-async fn health() -> &'static str {
-    "OK"
+    axum::serve(listener, app).await.unwrap();
 }
