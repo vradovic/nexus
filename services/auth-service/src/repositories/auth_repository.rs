@@ -1,7 +1,7 @@
 use sqlx::PgPool;
 
 use crate::error::AppError;
-use crate::models::AuthAccount;
+use crate::models::{AuthAccount, AuthAccountWithPassword};
 
 #[derive(Clone)]
 pub struct AuthRepository {
@@ -37,5 +37,22 @@ impl AuthRepository {
             }
             _ => AppError::internal("database operation failed"),
         })
+    }
+
+    pub async fn find_auth_account_by_email(
+        &self,
+        email: &str,
+    ) -> Result<Option<AuthAccountWithPassword>, AppError> {
+        sqlx::query_as::<_, AuthAccountWithPassword>(
+            r#"
+            select id, email, password_hash
+            from auth_accounts
+            where email = $1
+            "#,
+        )
+        .bind(email)
+        .fetch_optional(&self.db)
+        .await
+        .map_err(|_| AppError::internal("database operation failed"))
     }
 }

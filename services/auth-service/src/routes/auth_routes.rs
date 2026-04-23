@@ -7,11 +7,13 @@ use axum::{
 
 use crate::app_state::AppState;
 use crate::error::AppError;
-use crate::models::{RegisterRequest, RegisterResponse};
+use crate::models::{LoginRequest, LoginResponse, RegisterRequest, RegisterResponse};
 use crate::services::auth_service;
 
 pub fn router() -> Router<AppState> {
-    Router::new().route("/register", post(register))
+    Router::new()
+        .route("/register", post(register))
+        .route("/login", post(login))
 }
 
 async fn register(
@@ -21,4 +23,13 @@ async fn register(
     let response = auth_service::register_user(&state.auth_repository, payload).await?;
 
     Ok((StatusCode::CREATED, Json(response)))
+}
+
+async fn login(
+    State(state): State<AppState>,
+    Json(payload): Json<LoginRequest>,
+) -> Result<Json<LoginResponse>, AppError> {
+    let response = auth_service::login_user(&state.auth_repository, &state.jwt_secret, payload).await?;
+
+    Ok(Json(response))
 }

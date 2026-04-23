@@ -23,6 +23,13 @@ impl AppError {
         }
     }
 
+    pub fn unauthorized(message: &str) -> Self {
+        Self {
+            status: StatusCode::UNAUTHORIZED,
+            message: message.to_string(),
+        }
+    }
+
     pub fn internal(message: &str) -> Self {
         Self {
             status: StatusCode::INTERNAL_SERVER_ERROR,
