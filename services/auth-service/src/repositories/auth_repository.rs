@@ -1,4 +1,5 @@
 use sqlx::PgPool;
+use uuid::Uuid;
 
 use crate::error::AppError;
 use crate::models::{AuthAccount, AuthAccountWithPassword};
@@ -15,17 +16,19 @@ impl AuthRepository {
 
     pub async fn create_auth_account(
         &self,
+        id: Uuid,
         email: &str,
         username: &str,
         password_hash: &str,
     ) -> Result<AuthAccount, AppError> {
         sqlx::query_as::<_, AuthAccount>(
             r#"
-            insert into auth_accounts (email, username, password_hash)
-            values ($1, $2, $3)
+            insert into auth_accounts (id, email, username, password_hash)
+            values ($1, $2, $3, $4)
             returning id, email, username
             "#,
         )
+        .bind(id)
         .bind(email)
         .bind(username)
         .bind(password_hash)

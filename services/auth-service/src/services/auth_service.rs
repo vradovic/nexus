@@ -1,26 +1,33 @@
+use async_nats::{Client, jetstream};
 use argon2::{
     Argon2, PasswordHasher, PasswordVerifier,
     password_hash::{PasswordHash, SaltString, rand_core::OsRng},
 };
 use jsonwebtoken::{EncodingKey, Header, encode};
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use uuid::Uuid;
 
 use crate::error::AppError;
+use crate::messaging::USER_REGISTERED_SUBJECT;
 use crate::models::{LoginRequest, LoginResponse, RegisterRequest, RegisterResponse};
 use crate::repositories::auth_repository::AuthRepository;
 
 pub async fn register_user(
     auth_repository: &AuthRepository,
+    nats_client: &Client,
     payload: RegisterRequest,
 ) -> Result<RegisterResponse, AppError> {
     validate_registration(&payload)?;
 
     let password_hash = hash_password(&payload.password)?;
+    let user_id = Uuid::new_v4();
 
     let auth_account = auth_repository
-        .create_auth_account(&payload.email, &payload.username, &password_hash)
+        .create_auth_account(user_id, &payload.email, &payload.username, &password_hash)
         .await?;
+
+    publish_user_registered_event(nats_client, &auth_account, &payload).await?;
 
     Ok(RegisterResponse {
         id: auth_account.id,
@@ -65,6 +72,14 @@ fn validate_registration(payload: &RegisterRequest) -> Result<(), AppError> {
         ));
     }
 
+    if payload.first_name.trim().is_empty() {
+        return Err(AppError::bad_request("first_name is required"));
+    }
+
+    if payload.last_name.trim().is_empty() {
+        return Err(AppError::bad_request("last_name is required"));
+    }
+
     Ok(())
 }
 
@@ -98,7 +113,29 @@ fn verify_password(password: &str, stored_hash: &str) -> Result<(), AppError> {
         .map_err(|_| AppError::unauthorized("invalid email or password"))
 }
 
-fn create_access_token(user_id: i32, email: &str, jwt_secret: &str) -> Result<String, AppError> {
+async fn publish_user_registered_event(
+    nats_client: &Client,
+    auth_account: &crate::models::AuthAccount,
+    payload: &RegisterRequest,
+) -> Result<(), AppError> {
+    let event = UserRegisteredEvent {
+        user_id: auth_account.id,
+        first_name: payload.first_name.clone(),
+        last_name: payload.last_name.clone(),
+    };
+
+    let body = serde_json::to_vec(&event)
+        .map_err(|_| AppError::internal("failed to serialize registration event"))?;
+
+    jetstream::new(nats_client.clone())
+        .publish(USER_REGISTERED_SUBJECT, body.into())
+        .await
+        .map_err(|_| AppError::internal("failed to publish registration event"))?;
+
+    Ok(())
+}
+
+fn create_access_token(user_id: Uuid, email: &str, jwt_secret: &str) -> Result<String, AppError> {
     let expiration = SystemTime::now()
         .checked_add(Duration::from_secs(60 * 60))
         .ok_or_else(|| AppError::internal("failed to calculate token expiration"))?
@@ -107,7 +144,7 @@ fn create_access_token(user_id: i32, email: &str, jwt_secret: &str) -> Result<St
         .as_secs() as usize;
 
     let claims = AccessTokenClaims {
-        sub: user_id,
+        sub: user_id.to_string(),
         email: email.to_string(),
         exp: expiration,
     };
@@ -122,9 +159,16 @@ fn create_access_token(user_id: i32, email: &str, jwt_secret: &str) -> Result<St
 
 #[derive(Serialize)]
 struct AccessTokenClaims {
-    sub: i32,
+    sub: String,
     email: String,
     exp: usize,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct UserRegisteredEvent {
+    user_id: Uuid,
+    first_name: String,
+    last_name: String,
 }
 
 #[cfg(test)]
@@ -132,10 +176,18 @@ mod tests {
     use super::{validate_login, validate_registration};
     use crate::models::{LoginRequest, RegisterRequest};
 
-    fn request(email: &str, username: &str, password: &str) -> RegisterRequest {
+    fn request(
+        email: &str,
+        username: &str,
+        first_name: &str,
+        last_name: &str,
+        password: &str,
+    ) -> RegisterRequest {
         RegisterRequest {
             email: email.to_string(),
             username: username.to_string(),
+            first_name: first_name.to_string(),
+            last_name: last_name.to_string(),
             password: password.to_string(),
         }
     }
@@ -149,7 +201,7 @@ mod tests {
 
     #[test]
     fn accepts_valid_registration_payload() {
-        let payload = request("player@example.com", "player1", "supersecret");
+        let payload = request("player@example.com", "player1", "John", "Doe", "supersecret");
 
         let result = validate_registration(&payload);
 
@@ -158,7 +210,16 @@ mod tests {
 
     #[test]
     fn rejects_short_password() {
-        let payload = request("player@example.com", "player1", "short");
+        let payload = request("player@example.com", "player1", "John", "Doe", "short");
+
+        let result = validate_registration(&payload);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn rejects_missing_first_name() {
+        let payload = request("player@example.com", "player1", "", "Doe", "supersecret");
 
         let result = validate_registration(&payload);
 

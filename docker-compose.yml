@@ -11,5 +11,26 @@ services:
     volumes:
       - auth_pgdata:/var/lib/postgresql
 
+  users-db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: users_db
+    ports:
+      - "5434:5432"
+    volumes:
+      - users_pgdata:/var/lib/postgresql
+
+  nats:
+    image: nats:2.11-alpine
+    restart: unless-stopped
+    command: ["-js"]
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+
 volumes:
   auth_pgdata:
+  users_pgdata:

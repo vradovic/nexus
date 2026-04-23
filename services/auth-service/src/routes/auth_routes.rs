@@ -20,7 +20,7 @@ async fn register(
     State(state): State<AppState>,
     Json(payload): Json<RegisterRequest>,
 ) -> Result<(StatusCode, Json<RegisterResponse>), AppError> {
-    let response = auth_service::register_user(&state.auth_repository, payload).await?;
+    let response = auth_service::register_user(&state.auth_repository, &state.nats_client, payload).await?;
 
     Ok((StatusCode::CREATED, Json(response)))
 }
