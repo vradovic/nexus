@@ -1,0 +1,24 @@
+use axum::{
+    Json, Router,
+    extract::State,
+    http::StatusCode,
+    routing::post,
+};
+
+use crate::app_state::AppState;
+use crate::error::AppError;
+use crate::models::{RegisterRequest, RegisterResponse};
+use crate::services::auth_service;
+
+pub fn router() -> Router<AppState> {
+    Router::new().route("/register", post(register))
+}
+
+async fn register(
+    State(state): State<AppState>,
+    Json(payload): Json<RegisterRequest>,
+) -> Result<(StatusCode, Json<RegisterResponse>), AppError> {
+    let response = auth_service::register_user(&state.auth_repository, payload).await?;
+
+    Ok((StatusCode::CREATED, Json(response)))
+}

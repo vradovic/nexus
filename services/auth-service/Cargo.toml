@@ -1,10 +1,12 @@
 [package]
-name = "users-service"
+name = "auth-service"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+argon2 = "0.5.3"
 axum = "0.8.8"
+dotenvy = "0.15.7"
 serde = { version = "1.0.228", features = ["derive"] }
-sqlx = { version = "0.8.6", features = ["runtime-tokio-native-tls", "postgres"] }
+sqlx = { version = "0.8.6", features = ["macros", "postgres", "runtime-tokio-rustls"] }
 tokio = { version = "1.50.0", features = ["full"] }

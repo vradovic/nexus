@@ -1,4 +1,7 @@
 {
     "rust-analyzer.check.command": "clippy",
-    "editor.formatOnSave": true,
+    "rust-analyzer.linkedProjects": [
+        "services/auth-service/Cargo.toml"
+    ],
+    "editor.formatOnSave": true
 }
