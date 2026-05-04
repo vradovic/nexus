@@ -3,6 +3,7 @@
     "rust-analyzer.linkedProjects": [
         "crates/nexus-shared/Cargo.toml",
         "crates/auth-service/Cargo.toml",
+        "crates/rooms-service/Cargo.toml",
         "crates/users-service/Cargo.toml"
     ],
     "editor.formatOnSave": true

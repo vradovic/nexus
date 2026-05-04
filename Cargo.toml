@@ -2,6 +2,7 @@
 members = [
     "crates/auth-service",
     "crates/nexus-shared",
+    "crates/rooms-service",
     "crates/users-service",
 ]
 resolver = "3"
