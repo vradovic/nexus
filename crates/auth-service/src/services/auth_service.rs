@@ -4,11 +4,11 @@ use argon2::{
     password_hash::{PasswordHash, SaltString, rand_core::OsRng},
 };
 use jsonwebtoken::{EncodingKey, Header, encode};
+use nexus_shared::AppError;
 use serde::{Serialize, Deserialize};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
-use crate::error::AppError;
 use crate::messaging::USER_REGISTERED_SUBJECT;
 use crate::models::{LoginRequest, LoginResponse, RegisterRequest, RegisterResponse};
 use crate::repositories::auth_repository::AuthRepository;

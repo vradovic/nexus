@@ -3,10 +3,10 @@ use axum::{
     extract::{Path, State},
     routing::get,
 };
+use nexus_shared::AppError;
 use uuid::Uuid;
 
 use crate::app_state::AppState;
-use crate::error::AppError;
 use crate::models::UserProfile;
 use crate::services::user_service;
 

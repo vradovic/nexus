@@ -4,9 +4,9 @@ use axum::{
     http::StatusCode,
     routing::post,
 };
+use nexus_shared::AppError;
 
 use crate::app_state::AppState;
-use crate::error::AppError;
 use crate::models::{LoginRequest, LoginResponse, RegisterRequest, RegisterResponse};
 use crate::services::auth_service;
 

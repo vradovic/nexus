@@ -1,5 +1,6 @@
 use async_nats::{Client, jetstream};
 use futures_util::StreamExt;
+use nexus_shared::AppError;
 
 use crate::models::UserRegisteredEvent;
 use crate::repositories::user_profile_repository::UserProfileRepository;
@@ -85,7 +86,7 @@ trait ErrorText {
     fn into_response_text(self) -> String;
 }
 
-impl ErrorText for crate::error::AppError {
+impl ErrorText for AppError {
     fn into_response_text(self) -> String {
         let response = axum::response::IntoResponse::into_response(self);
         format!("status={}", response.status())

@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "crates/auth-service",
+    "crates/nexus-shared",
+    "crates/users-service",
+]
+resolver = "3"

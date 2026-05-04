@@ -1,7 +1,7 @@
+use nexus_shared::AppError;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::error::AppError;
 use crate::models::{AuthAccount, AuthAccountWithPassword};
 
 #[derive(Clone)]

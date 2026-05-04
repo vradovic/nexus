@@ -1,6 +1,6 @@
+use nexus_shared::AppError;
 use uuid::Uuid;
 
-use crate::error::AppError;
 use crate::models::{UserProfile, UserRegisteredEvent};
 use crate::repositories::user_profile_repository::UserProfileRepository;
 
