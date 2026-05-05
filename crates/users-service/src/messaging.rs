@@ -1,6 +1,6 @@
 use async_nats::{Client, jetstream};
 use futures_util::StreamExt;
-use nexus_shared::AppError;
+use nexus_shared::{AppError, ensure_pull_consumer, ensure_stream};
 
 use crate::models::UserRegisteredEvent;
 use crate::repositories::user_profile_repository::UserProfileRepository;
@@ -11,34 +11,22 @@ const USER_REGISTERED_SUBJECT: &str = "auth.user.registered";
 const USER_REGISTERED_CONSUMER: &str = "users-service-registration-consumer";
 
 pub async fn ensure_registration_stream(nats_client: &Client) {
-    let jetstream = jetstream::new(nats_client.clone());
-
-    jetstream
-        .get_or_create_stream(jetstream::stream::Config {
-            name: USER_REGISTERED_STREAM.to_string(),
-            subjects: vec![USER_REGISTERED_SUBJECT.to_string()],
-            ..Default::default()
-        })
+    ensure_stream(
+        nats_client,
+        USER_REGISTERED_STREAM,
+        vec![USER_REGISTERED_SUBJECT.to_string()],
+    )
         .await
         .expect("failed to create or get auth events stream");
 }
 
 pub async fn ensure_registration_consumer(nats_client: &Client) {
-    let jetstream = jetstream::new(nats_client.clone());
-    let stream = jetstream
-        .get_stream(USER_REGISTERED_STREAM)
-        .await
-        .expect("failed to get auth events stream");
-
-    stream
-        .get_or_create_consumer(
-            USER_REGISTERED_CONSUMER,
-            jetstream::consumer::pull::Config {
-                durable_name: Some(USER_REGISTERED_CONSUMER.to_string()),
-                filter_subject: USER_REGISTERED_SUBJECT.to_string(),
-                ..Default::default()
-            },
-        )
+    ensure_pull_consumer(
+        nats_client,
+        USER_REGISTERED_STREAM,
+        USER_REGISTERED_CONSUMER,
+        USER_REGISTERED_SUBJECT,
+    )
         .await
         .expect("failed to create or get registration consumer");
 }

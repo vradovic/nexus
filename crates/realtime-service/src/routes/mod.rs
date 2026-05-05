@@ -1,6 +1,4 @@
-mod game_session_routes;
-mod lobby_routes;
-mod matchmaking_routes;
+mod websocket_routes;
 
 use axum::{Router, routing::get};
 
@@ -9,9 +7,7 @@ use crate::app_state::AppState;
 pub fn app_router(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health))
-        .merge(lobby_routes::router())
-        .merge(matchmaking_routes::router())
-        .merge(game_session_routes::router())
+        .merge(websocket_routes::router())
         .with_state(state)
 }
 

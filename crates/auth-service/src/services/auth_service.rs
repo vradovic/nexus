@@ -1,11 +1,11 @@
-use async_nats::{Client, jetstream};
+use async_nats::Client;
 use argon2::{
     Argon2, PasswordHasher, PasswordVerifier,
     password_hash::{PasswordHash, SaltString, rand_core::OsRng},
 };
 use jsonwebtoken::{EncodingKey, Header, encode};
-use nexus_shared::AppError;
-use serde::{Serialize, Deserialize};
+use nexus_shared::{AccessTokenClaims, AppError, publish_json};
+use serde::{Deserialize, Serialize};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
@@ -124,15 +124,7 @@ async fn publish_user_registered_event(
         last_name: payload.last_name.clone(),
     };
 
-    let body = serde_json::to_vec(&event)
-        .map_err(|_| AppError::internal("failed to serialize registration event"))?;
-
-    jetstream::new(nats_client.clone())
-        .publish(USER_REGISTERED_SUBJECT, body.into())
-        .await
-        .map_err(|_| AppError::internal("failed to publish registration event"))?;
-
-    Ok(())
+    publish_json(nats_client, USER_REGISTERED_SUBJECT, &event).await
 }
 
 fn create_access_token(user_id: Uuid, email: &str, jwt_secret: &str) -> Result<String, AppError> {
@@ -155,13 +147,6 @@ fn create_access_token(user_id: Uuid, email: &str, jwt_secret: &str) -> Result<S
         &EncodingKey::from_secret(jwt_secret.as_bytes()),
     )
     .map_err(|_| AppError::internal("failed to generate access token"))
-}
-
-#[derive(Serialize)]
-struct AccessTokenClaims {
-    sub: String,
-    email: String,
-    exp: usize,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

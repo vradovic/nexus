@@ -1,3 +1,4 @@
+use nexus_shared::GameMode;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -46,8 +47,30 @@ pub enum GameSessionStatus {
     Finished,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct MatchmakingTicket {
+    pub id: Uuid,
+    pub owner_user_id: Uuid,
+    pub player_ids: Vec<Uuid>,
+    pub game_mode: GameMode,
+    pub status: MatchmakingTicketStatus,
+    pub game_session_id: Option<Uuid>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "snake_case")]
+pub enum MatchmakingTicketStatus {
+    Queued,
+    Matched,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct CreateLobbyRequest {
     pub owner_user_id: Uuid,
     pub name: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct JoinMatchmakingRequest {
+    pub game_mode: GameMode,
 }
