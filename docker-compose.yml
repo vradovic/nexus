@@ -23,6 +23,18 @@ services:
     volumes:
       - users_pgdata:/var/lib/postgresql
 
+  matchmaking-db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: matchmaking_db
+    ports:
+      - "5435:5432"
+    volumes:
+      - matchmaking_pgdata:/var/lib/postgresql
+
   nats:
     image: nats:2.11-alpine
     restart: unless-stopped
@@ -39,4 +51,5 @@ services:
 
 volumes:
   auth_pgdata:
+  matchmaking_pgdata:
   users_pgdata:

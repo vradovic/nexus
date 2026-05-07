@@ -8,7 +8,7 @@ use axum::{
     routing::get,
 };
 use futures_util::{SinkExt, StreamExt};
-use nexus_shared::{AppError, decode_access_token};
+use nexus_shared::{AppError, authenticated_user_from_token};
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
@@ -26,15 +26,10 @@ async fn connect_websocket(
     Query(query): Query<WebSocketConnectQuery>,
     websocket_upgrade: WebSocketUpgrade,
 ) -> Result<Response, AppError> {
-    let claims = decode_access_token(&query.token, &state.jwt_secret)?;
-    let user_id = claims
-        .sub
-        .parse::<Uuid>()
-        .map_err(|_| AppError::unauthorized("invalid token subject"))?;
-    let email = claims.email;
+    let user = authenticated_user_from_token(&query.token, &state.jwt_secret)?;
 
     Ok(websocket_upgrade.on_upgrade(move |socket| {
-        handle_socket(state, socket, user_id, email)
+        handle_socket(state, socket, user.user_id, user.email)
     }))
 }
 

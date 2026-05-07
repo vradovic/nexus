@@ -4,7 +4,7 @@ use argon2::{
     password_hash::{PasswordHash, SaltString, rand_core::OsRng},
 };
 use jsonwebtoken::{EncodingKey, Header, encode};
-use nexus_shared::{AccessTokenClaims, AppError, publish_json};
+use nexus_shared::{AccessTokenClaims, AppError, UserRole, publish_json};
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
@@ -24,7 +24,13 @@ pub async fn register_user(
     let user_id = Uuid::new_v4();
 
     let auth_account = auth_repository
-        .create_auth_account(user_id, &payload.email, &payload.username, &password_hash)
+        .create_auth_account(
+            user_id,
+            &payload.email,
+            &payload.username,
+            &password_hash,
+            UserRole::Player,
+        )
         .await?;
 
     publish_user_registered_event(nats_client, &auth_account, &payload).await?;
@@ -50,7 +56,13 @@ pub async fn login_user(
 
     verify_password(&payload.password, &auth_account.password_hash)?;
 
-    let access_token = create_access_token(auth_account.id, &auth_account.email, jwt_secret)?;
+    let role = auth_account
+        .role
+        .parse::<UserRole>()
+        .map_err(|_| AppError::internal("stored user role is invalid"))?;
+
+    let access_token =
+        create_access_token(auth_account.id, &auth_account.email, role, jwt_secret)?;
 
     Ok(LoginResponse { access_token })
 }
@@ -127,7 +139,12 @@ async fn publish_user_registered_event(
     publish_json(nats_client, USER_REGISTERED_SUBJECT, &event).await
 }
 
-fn create_access_token(user_id: Uuid, email: &str, jwt_secret: &str) -> Result<String, AppError> {
+fn create_access_token(
+    user_id: Uuid,
+    email: &str,
+    role: UserRole,
+    jwt_secret: &str,
+) -> Result<String, AppError> {
     let expiration = SystemTime::now()
         .checked_add(Duration::from_secs(60 * 60))
         .ok_or_else(|| AppError::internal("failed to calculate token expiration"))?
@@ -138,6 +155,7 @@ fn create_access_token(user_id: Uuid, email: &str, jwt_secret: &str) -> Result<S
     let claims = AccessTokenClaims {
         sub: user_id.to_string(),
         email: email.to_string(),
+        role,
         exp: expiration,
     };
 

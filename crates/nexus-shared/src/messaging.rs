@@ -8,6 +8,7 @@ pub async fn ensure_stream(
     stream_name: &str,
     subjects: Vec<String>,
 ) -> Result<(), AppError> {
+    let requested_subjects = subjects.clone();
     jetstream::new(nats_client.clone())
         .get_or_create_stream(jetstream::stream::Config {
             name: stream_name.to_string(),
@@ -15,7 +16,12 @@ pub async fn ensure_stream(
             ..Default::default()
         })
         .await
-        .map_err(|_| AppError::internal("failed to create or get nats stream"))?;
+        .map_err(|error| {
+            AppError::internal(&format!(
+                "failed to create or get nats stream '{stream_name}' for subjects {:?}: {error}",
+                requested_subjects
+            ))
+        })?;
 
     Ok(())
 }
@@ -30,7 +36,11 @@ pub async fn ensure_pull_consumer(
     let stream = jetstream
         .get_stream(stream_name)
         .await
-        .map_err(|_| AppError::internal("failed to get nats stream"))?;
+        .map_err(|error| {
+            AppError::internal(&format!(
+                "failed to get nats stream '{stream_name}': {error}"
+            ))
+        })?;
 
     stream
         .get_or_create_consumer(
@@ -42,7 +52,11 @@ pub async fn ensure_pull_consumer(
             },
         )
         .await
-        .map_err(|_| AppError::internal("failed to create or get nats consumer"))?;
+        .map_err(|error| {
+            AppError::internal(&format!(
+                "failed to create or get nats consumer '{consumer_name}' on stream '{stream_name}': {error}"
+            ))
+        })?;
 
     Ok(())
 }
@@ -61,7 +75,11 @@ where
     jetstream::new(nats_client.clone())
         .publish(subject.to_string(), body.into())
         .await
-        .map_err(|_| AppError::internal("failed to publish nats message"))?;
+        .map_err(|error| {
+            AppError::internal(&format!(
+                "failed to publish nats message on subject '{subject}': {error}"
+            ))
+        })?;
 
     Ok(())
 }

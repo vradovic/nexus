@@ -31,6 +31,13 @@ impl AppError {
         }
     }
 
+    pub fn forbidden(message: &str) -> Self {
+        Self {
+            status: StatusCode::FORBIDDEN,
+            message: message.to_string(),
+        }
+    }
+
     pub fn not_found(message: &str) -> Self {
         Self {
             status: StatusCode::NOT_FOUND,

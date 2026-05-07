@@ -1,4 +1,4 @@
-use nexus_shared::AppError;
+use nexus_shared::{AppError, UserRole};
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -20,11 +20,12 @@ impl AuthRepository {
         email: &str,
         username: &str,
         password_hash: &str,
+        role: UserRole,
     ) -> Result<AuthAccount, AppError> {
         sqlx::query_as::<_, AuthAccount>(
             r#"
-            insert into auth_accounts (id, email, username, password_hash)
-            values ($1, $2, $3, $4)
+            insert into auth_accounts (id, email, username, password_hash, role)
+            values ($1, $2, $3, $4, $5)
             returning id, email, username
             "#,
         )
@@ -32,6 +33,7 @@ impl AuthRepository {
         .bind(email)
         .bind(username)
         .bind(password_hash)
+        .bind(role.as_str())
         .fetch_one(&self.db)
         .await
         .map_err(|error| match error {
@@ -48,7 +50,7 @@ impl AuthRepository {
     ) -> Result<Option<AuthAccountWithPassword>, AppError> {
         sqlx::query_as::<_, AuthAccountWithPassword>(
             r#"
-            select id, email, password_hash
+            select id, email, password_hash, role
             from auth_accounts
             where email = $1
             "#,

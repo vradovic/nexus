@@ -29,6 +29,7 @@ pub struct AuthAccountWithPassword {
     pub id: Uuid,
     pub email: String,
     pub password_hash: String,
+    pub role: String,
 }
 
 #[derive(Debug, Serialize)]

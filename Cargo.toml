@@ -1,9 +1,9 @@
 [workspace]
 members = [
     "crates/auth-service",
+    "crates/matchmaking-service",
     "crates/nexus-shared",
     "crates/realtime-service",
-    "crates/rooms-service",
     "crates/users-service",
 ]
 resolver = "3"

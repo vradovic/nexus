@@ -1,7 +1,7 @@
 use async_nats::{Client, jetstream};
 use futures_util::StreamExt;
 use nexus_shared::{
-    MATCH_FOUND_SUBJECT, MatchFoundEvent, REALTIME_EVENTS_STREAM, ensure_pull_consumer,
+    MATCHMAKING_EVENTS_STREAM, MATCH_FOUND_SUBJECT, MatchFoundEvent, ensure_pull_consumer,
     ensure_stream,
 };
 
@@ -12,17 +12,17 @@ const REALTIME_CONSUMER: &str = "realtime-service-match-found-consumer";
 pub async fn ensure_realtime_stream(nats_client: &Client) {
     ensure_stream(
         nats_client,
-        REALTIME_EVENTS_STREAM,
+        MATCHMAKING_EVENTS_STREAM,
         vec![MATCH_FOUND_SUBJECT.to_string()],
     )
         .await
-        .expect("failed to create or get realtime events stream");
+        .expect("failed to create or get matchmaking events stream");
 }
 
 pub async fn ensure_realtime_consumer(nats_client: &Client) {
     ensure_pull_consumer(
         nats_client,
-        REALTIME_EVENTS_STREAM,
+        MATCHMAKING_EVENTS_STREAM,
         REALTIME_CONSUMER,
         MATCH_FOUND_SUBJECT,
     )
@@ -36,9 +36,9 @@ pub async fn start_match_found_consumer(
 ) {
     let jetstream = jetstream::new(nats_client);
     let stream = jetstream
-        .get_stream(REALTIME_EVENTS_STREAM)
+        .get_stream(MATCHMAKING_EVENTS_STREAM)
         .await
-        .expect("failed to get realtime events stream");
+        .expect("failed to get matchmaking events stream");
     let consumer = stream
         .get_consumer::<jetstream::consumer::pull::Config>(REALTIME_CONSUMER)
         .await
@@ -61,7 +61,7 @@ pub async fn start_match_found_consumer(
             Ok(event) => {
                 let server_event = ServerEvent::from(event.clone());
 
-                for user_id in event.user_ids {
+                for user_id in event.player_ids {
                     connection_registry
                         .send_event_to_user(user_id, &server_event)
                         .await;
