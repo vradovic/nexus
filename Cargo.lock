@@ -1085,6 +1085,7 @@ dependencies = [
  "async-nats",
  "axum",
  "jsonwebtoken",
+ "redis",
  "serde",
  "serde_json",
  "uuid",

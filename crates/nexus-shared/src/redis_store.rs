@@ -1,6 +1,7 @@
-use nexus_shared::AppError;
 use redis::{AsyncCommands, Client};
 use serde::{Serialize, de::DeserializeOwned};
+
+use crate::AppError;
 
 pub async fn write_json<T>(redis_client: &Client, key: &str, value: &T) -> Result<(), AppError>
 where

@@ -2,6 +2,7 @@ pub mod auth;
 pub mod error;
 pub mod matchmaking;
 pub mod messaging;
+pub mod redis_store;
 
 pub use auth::{
     AccessTokenClaims, AuthenticatedUser, UserRole, authenticated_user,
@@ -10,3 +11,4 @@ pub use auth::{
 pub use error::AppError;
 pub use matchmaking::{MATCHMAKING_EVENTS_STREAM, MATCH_FOUND_SUBJECT, MatchFoundEvent};
 pub use messaging::{ensure_pull_consumer, ensure_stream, publish_json};
+pub use redis_store::{read_json, write_json};

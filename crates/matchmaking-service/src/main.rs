@@ -3,7 +3,6 @@ mod db;
 mod messaging;
 mod middleware;
 mod models;
-mod redis_store;
 mod repositories;
 mod routes;
 mod services;

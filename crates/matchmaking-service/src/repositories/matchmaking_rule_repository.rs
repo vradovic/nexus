@@ -1,5 +1,6 @@
 use nexus_shared::AppError;
 use sqlx::PgPool;
+use uuid::Uuid;
 
 use crate::models::MatchmakingRule;
 
@@ -42,5 +43,30 @@ impl MatchmakingRuleRepository {
         .fetch_optional(&self.db)
         .await
         .map_err(|_| AppError::internal("database operation failed"))
+    }
+
+    pub async fn create_rule(
+        &self,
+        ticket_key: &str,
+        required_players: i32,
+    ) -> Result<MatchmakingRule, AppError> {
+        sqlx::query_as::<_, MatchmakingRule>(
+            r#"
+            insert into matchmaking_rules (id, ticket_key, required_players, enabled)
+            values ($1, $2, $3, true)
+            returning id, ticket_key, required_players
+            "#,
+        )
+        .bind(Uuid::new_v4())
+        .bind(ticket_key)
+        .bind(required_players)
+        .fetch_one(&self.db)
+        .await
+        .map_err(|error| match error {
+            sqlx::Error::Database(db_error) if db_error.is_unique_violation() => {
+                AppError::conflict("ticket_key already exists")
+            }
+            _ => AppError::internal("database operation failed"),
+        })
     }
 }

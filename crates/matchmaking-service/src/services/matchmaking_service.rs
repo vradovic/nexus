@@ -6,7 +6,10 @@ use uuid::Uuid;
 
 use crate::{
     app_state::AppState,
-    models::{JoinMatchmakingRequest, MatchmakingRule, MatchmakingTicket},
+    models::{
+        CreateMatchmakingRuleRequest, JoinMatchmakingRequest, MatchmakingRule,
+        MatchmakingTicket,
+    },
     repositories::matchmaking_rule_repository::MatchmakingRuleRepository,
     stores::matchmaking_store::MatchmakingStore,
 };
@@ -67,6 +70,26 @@ pub async fn leave_matchmaking(
         .remove_ticket_from_queue(&ticket.ticket_key, ticket.id)
         .await?;
     matchmaking_store.delete_ticket(&ticket).await
+}
+
+pub async fn create_matchmaking_rule(
+    matchmaking_rule_repository: &MatchmakingRuleRepository,
+    payload: CreateMatchmakingRuleRequest,
+) -> Result<MatchmakingRule, AppError> {
+    let ticket_key = payload.ticket_key.trim();
+    if ticket_key.is_empty() {
+        return Err(AppError::bad_request("ticket_key is required"));
+    }
+
+    if payload.required_players < 2 {
+        return Err(AppError::bad_request(
+            "required_players must be at least 2",
+        ));
+    }
+
+    matchmaking_rule_repository
+        .create_rule(ticket_key, payload.required_players)
+        .await
 }
 
 pub async fn run_matchmaking_loop(state: AppState) {

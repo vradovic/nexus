@@ -9,7 +9,7 @@ pub struct MatchmakingTicket {
     pub ticket_key: String,
 }
 
-#[derive(Debug, FromRow, Clone)]
+#[derive(Debug, Serialize, FromRow, Clone)]
 pub struct MatchmakingRule {
     pub id: Uuid,
     pub ticket_key: String,
@@ -19,6 +19,12 @@ pub struct MatchmakingRule {
 #[derive(Debug, Deserialize)]
 pub struct JoinMatchmakingRequest {
     pub ticket_key: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateMatchmakingRuleRequest {
+    pub ticket_key: String,
+    pub required_players: i32,
 }
 
 #[derive(Debug, Serialize)]

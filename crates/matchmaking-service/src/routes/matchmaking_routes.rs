@@ -9,17 +9,29 @@ use nexus_shared::{AppError, AuthenticatedUser};
 
 use crate::{
     app_state::AppState,
-    middleware::require_player_role,
-    models::{JoinMatchmakingRequest, MatchmakingStatusResponse, MatchmakingTicket},
+    middleware::{require_admin_role, require_player_role},
+    models::{
+        CreateMatchmakingRuleRequest, JoinMatchmakingRequest, MatchmakingRule,
+        MatchmakingStatusResponse, MatchmakingTicket,
+    },
     services::matchmaking_service,
 };
 
 pub fn router(state: AppState) -> Router<AppState> {
-    Router::new()
+    let player_routes = Router::new()
         .route("/matchmaking/join", post(join_matchmaking))
         .route("/matchmaking/status", get(get_matchmaking_status))
         .route("/matchmaking/leave", post(leave_matchmaking))
-        .route_layer(middleware::from_fn_with_state(state, require_player_role))
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            require_player_role,
+        ));
+
+    let admin_routes = Router::new()
+        .route("/admin/matchmaking/rules", post(create_matchmaking_rule))
+        .route_layer(middleware::from_fn_with_state(state, require_admin_role));
+
+    Router::new().merge(player_routes).merge(admin_routes)
 }
 
 async fn join_matchmaking(
@@ -55,4 +67,17 @@ async fn leave_matchmaking(
     matchmaking_service::leave_matchmaking(&state.matchmaking_store, user.user_id).await?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+async fn create_matchmaking_rule(
+    State(state): State<AppState>,
+    Json(payload): Json<CreateMatchmakingRuleRequest>,
+) -> Result<(StatusCode, Json<MatchmakingRule>), AppError> {
+    let rule = matchmaking_service::create_matchmaking_rule(
+        &state.matchmaking_rule_repository,
+        payload,
+    )
+    .await?;
+
+    Ok((StatusCode::CREATED, Json(rule)))
 }

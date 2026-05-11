@@ -1,8 +1,7 @@
-use nexus_shared::AppError;
+use nexus_shared::{AppError, read_json, write_json};
 use redis::{AsyncCommands, Client};
 use uuid::Uuid;
-
-use crate::{models::MatchmakingTicket, redis_store};
+use crate::models::MatchmakingTicket;
 
 #[derive(Clone)]
 pub struct MatchmakingStore {
@@ -15,7 +14,7 @@ impl MatchmakingStore {
     }
 
     pub async fn save_ticket(&self, ticket: &MatchmakingTicket) -> Result<(), AppError> {
-        redis_store::write_json(&self.redis_client, &ticket_key(ticket.id), ticket).await?;
+        write_json(&self.redis_client, &ticket_key(ticket.id), ticket).await?;
         self.save_player_ticket_mapping(ticket.player_id, ticket.id).await
     }
 
@@ -23,7 +22,7 @@ impl MatchmakingStore {
         &self,
         ticket_id: Uuid,
     ) -> Result<Option<MatchmakingTicket>, AppError> {
-        redis_store::read_json(&self.redis_client, &ticket_key(ticket_id)).await
+        read_json(&self.redis_client, &ticket_key(ticket_id)).await
     }
 
     pub async fn find_ticket_by_player_id(
