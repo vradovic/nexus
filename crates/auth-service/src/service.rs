@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::messaging::USER_REGISTERED_SUBJECT;
 use crate::models::{LoginRequest, LoginResponse, RegisterRequest, RegisterResponse};
-use crate::repositories::auth_repository::AuthRepository;
+use crate::repository::AuthRepository;
 
 pub async fn register_user(
     auth_repository: &AuthRepository,
@@ -117,8 +117,8 @@ fn hash_password(password: &str) -> Result<String, AppError> {
 }
 
 fn verify_password(password: &str, stored_hash: &str) -> Result<(), AppError> {
-    let parsed_hash =
-        PasswordHash::new(stored_hash).map_err(|_| AppError::internal("stored password hash is invalid"))?;
+    let parsed_hash = PasswordHash::new(stored_hash)
+        .map_err(|_| AppError::internal("stored password hash is invalid"))?;
 
     Argon2::default()
         .verify_password(password.as_bytes(), &parsed_hash)

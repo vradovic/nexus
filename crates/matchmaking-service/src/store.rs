@@ -1,6 +1,7 @@
 use nexus_shared::{AppError, read_json, write_json};
 use redis::{AsyncCommands, Client};
 use uuid::Uuid;
+
 use crate::models::MatchmakingTicket;
 
 #[derive(Clone)]

@@ -1,6 +1,6 @@
 use sqlx::PgPool;
 
-use crate::repositories::user_profile_repository::UserProfileRepository;
+use crate::repository::UserProfileRepository;
 
 #[derive(Clone)]
 pub struct AppState {

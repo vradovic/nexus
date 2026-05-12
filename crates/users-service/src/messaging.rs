@@ -3,8 +3,8 @@ use futures_util::StreamExt;
 use nexus_shared::{AppError, ensure_pull_consumer, ensure_stream};
 
 use crate::models::UserRegisteredEvent;
-use crate::repositories::user_profile_repository::UserProfileRepository;
-use crate::services::user_service;
+use crate::repository::UserProfileRepository;
+use crate::service;
 
 const USER_REGISTERED_STREAM: &str = "AUTH_EVENTS";
 const USER_REGISTERED_SUBJECT: &str = "auth.user.registered";
@@ -57,7 +57,7 @@ pub async fn start_user_registered_consumer(nats_client: Client, repository: Use
 
         match serde_json::from_slice::<UserRegisteredEvent>(&message.payload) {
             Ok(event) => {
-                if let Err(error) = user_service::handle_user_registered(&repository, event).await {
+                if let Err(error) = service::handle_user_registered(&repository, event).await {
                     eprintln!("failed to handle user registration event: {}", error.into_response_text());
                 } else if let Err(error) = message.ack().await {
                     eprintln!("failed to ack registration event: {}", error);

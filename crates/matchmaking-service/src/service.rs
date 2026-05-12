@@ -10,8 +10,8 @@ use crate::{
         CreateMatchmakingRuleRequest, JoinMatchmakingRequest, MatchmakingRule,
         MatchmakingTicket,
     },
-    repositories::matchmaking_rule_repository::MatchmakingRuleRepository,
-    stores::matchmaking_store::MatchmakingStore,
+    repository::MatchmakingRuleRepository,
+    store::MatchmakingStore,
 };
 
 pub async fn join_matchmaking(

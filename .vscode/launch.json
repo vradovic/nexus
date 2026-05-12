@@ -1,0 +1,109 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Auth Service",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--package",
+                    "auth-service",
+                    "--bin",
+                    "auth-service"
+                ],
+                "filter": {
+                    "name": "auth-service",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}/crates/auth-service",
+            "sourceLanguages": [
+                "rust"
+            ]
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Users Service",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--package",
+                    "users-service",
+                    "--bin",
+                    "users-service"
+                ],
+                "filter": {
+                    "name": "users-service",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}/crates/users-service",
+            "sourceLanguages": [
+                "rust"
+            ]
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Matchmaking Service",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--package",
+                    "matchmaking-service",
+                    "--bin",
+                    "matchmaking-service"
+                ],
+                "filter": {
+                    "name": "matchmaking-service",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}/crates/matchmaking-service",
+            "sourceLanguages": [
+                "rust"
+            ]
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Realtime Service",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--package",
+                    "realtime-service",
+                    "--bin",
+                    "realtime-service"
+                ],
+                "filter": {
+                    "name": "realtime-service",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}/crates/realtime-service",
+            "sourceLanguages": [
+                "rust"
+            ]
+        }
+    ],
+    "compounds": [
+        {
+            "name": "All Services",
+            "configurations": [
+                "Auth Service",
+                "Users Service",
+                "Matchmaking Service",
+                "Realtime Service"
+            ],
+            "stopAll": true
+        }
+    ]
+}

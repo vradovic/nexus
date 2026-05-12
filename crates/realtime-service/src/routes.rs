@@ -17,8 +17,15 @@ use crate::{
     models::{ServerEvent, WebSocketConnectQuery},
 };
 
-pub fn router() -> Router<AppState> {
-    Router::new().route("/ws", get(connect_websocket))
+pub fn app_router(state: AppState) -> Router {
+    Router::new()
+        .route("/health", get(health))
+        .route("/ws", get(connect_websocket))
+        .with_state(state)
+}
+
+async fn health() -> &'static str {
+    "OK"
 }
 
 async fn connect_websocket(

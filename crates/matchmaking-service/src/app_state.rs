@@ -2,10 +2,7 @@ use async_nats::Client as NatsClient;
 use redis::Client as RedisClient;
 use sqlx::PgPool;
 
-use crate::{
-    repositories::matchmaking_rule_repository::MatchmakingRuleRepository,
-    stores::matchmaking_store::MatchmakingStore,
-};
+use crate::{repository::MatchmakingRuleRepository, store::MatchmakingStore};
 
 #[derive(Clone)]
 pub struct AppState {

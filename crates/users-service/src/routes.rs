@@ -8,17 +8,24 @@ use uuid::Uuid;
 
 use crate::app_state::AppState;
 use crate::models::UserProfile;
-use crate::services::user_service;
+use crate::service;
 
-pub fn router() -> Router<AppState> {
-    Router::new().route("/users/{id}", get(get_user))
+pub fn app_router(state: AppState) -> Router {
+    Router::new()
+        .route("/health", get(health))
+        .route("/users/{id}", get(get_user))
+        .with_state(state)
+}
+
+async fn health() -> &'static str {
+    "OK"
 }
 
 async fn get_user(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<UserProfile>, AppError> {
-    let profile = user_service::get_user_profile(&state.user_profile_repository, id).await?;
+    let profile = service::get_user_profile(&state.user_profile_repository, id).await?;
 
     Ok(Json(profile))
 }

@@ -2,9 +2,9 @@ mod app_state;
 mod db;
 mod messaging;
 mod models;
-mod repositories;
+mod repository;
 mod routes;
-mod services;
+mod service;
 
 use std::net::SocketAddr;
 

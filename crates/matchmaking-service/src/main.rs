@@ -3,10 +3,10 @@ mod db;
 mod messaging;
 mod middleware;
 mod models;
-mod repositories;
+mod repository;
 mod routes;
-mod services;
-mod stores;
+mod service;
+mod store;
 
 use std::net::SocketAddr;
 
@@ -15,7 +15,7 @@ use axum::Router;
 use db::init_db;
 use messaging::ensure_matchmaking_stream;
 use redis::Client;
-use services::matchmaking_service::run_matchmaking_loop;
+use service::run_matchmaking_loop;
 
 #[tokio::main]
 async fn main() {

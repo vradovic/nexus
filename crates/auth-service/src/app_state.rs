@@ -1,7 +1,7 @@
 use async_nats::Client;
 use sqlx::PgPool;
 
-use crate::repositories::auth_repository::AuthRepository;
+use crate::repository::AuthRepository;
 
 #[derive(Clone)]
 pub struct AppState {

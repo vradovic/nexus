@@ -2,7 +2,7 @@ use nexus_shared::AppError;
 use uuid::Uuid;
 
 use crate::models::{UserProfile, UserRegisteredEvent};
-use crate::repositories::user_profile_repository::UserProfileRepository;
+use crate::repository::UserProfileRepository;
 
 pub async fn handle_user_registered(
     repository: &UserProfileRepository,
