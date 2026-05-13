@@ -10,7 +10,7 @@ pub async fn ensure_stream(
 ) -> Result<(), AppError> {
     let requested_subjects = subjects.clone();
     jetstream::new(nats_client.clone())
-        .get_or_create_stream(jetstream::stream::Config {
+        .create_or_update_stream(jetstream::stream::Config {
             name: stream_name.to_string(),
             subjects,
             ..Default::default()

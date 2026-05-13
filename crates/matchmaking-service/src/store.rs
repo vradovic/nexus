@@ -4,6 +4,8 @@ use uuid::Uuid;
 
 use crate::models::{MatchmakingTicket, PendingMatch};
 
+const PENDING_MATCH_TTL_GRACE_SECONDS: u64 = 5;
+
 #[derive(Clone)]
 pub struct MatchmakingStore {
     redis_client: Client,
@@ -393,7 +395,11 @@ fn active_pending_matches_key() -> String {
 
 fn pending_match_ttl_seconds(pending_match: &PendingMatch) -> i64 {
     let now = current_unix_timestamp();
-    let ttl = pending_match.expires_at_unix_seconds.saturating_sub(now);
+    let ttl = pending_match
+        .expires_at_unix_seconds
+        .saturating_sub(now)
+        .saturating_add(PENDING_MATCH_TTL_GRACE_SECONDS);
+
     if ttl == 0 { 1 } else { ttl as i64 }
 }
 

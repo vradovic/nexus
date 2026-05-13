@@ -155,6 +155,10 @@ async fn start_event_consumer<T, F>(
         match serde_json::from_slice::<T>(&message.payload) {
             Ok(event) => {
                 let recipients = event.player_ids().to_vec();
+                eprintln!(
+                    "realtime consumer '{}' received event for users {:?}",
+                    consumer_name, recipients
+                );
                 let server_event = to_server_event(event);
 
                 for user_id in recipients {
@@ -168,7 +172,17 @@ async fn start_event_consumer<T, F>(
                 }
             }
             Err(error) => {
-                eprintln!("failed to decode realtime event: {}", error);
+                eprintln!(
+                    "failed to decode realtime event: {}. payload={}",
+                    error,
+                    String::from_utf8_lossy(&message.payload)
+                );
+
+                // Ack malformed messages so an old event schema cannot poison the durable consumer
+                // and block newer realtime notifications forever.
+                if let Err(error) = message.ack().await {
+                    eprintln!("failed to ack malformed realtime event: {}", error);
+                }
             }
         }
     }

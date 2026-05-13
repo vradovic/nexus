@@ -123,6 +123,10 @@ pub async fn confirm_match(
     }
 
     if pending_match.confirmed_player_ids.len() == pending_match.player_ids.len() {
+        eprintln!(
+            "publishing match_confirmed for match_id={} players={:?}",
+            pending_match.id, pending_match.player_ids
+        );
         publish_match_confirmed_event(
             nats_client,
             MatchConfirmedEvent {
@@ -155,6 +159,10 @@ pub async fn decline_match(
         return Err(AppError::forbidden("player is not part of this pending match"));
     }
 
+    eprintln!(
+        "publishing match_declined for match_id={} declined_by={} players={:?}",
+        pending_match.id, player_id, pending_match.player_ids
+    );
     publish_match_declined_event(
         nats_client,
         MatchDeclinedEvent {
@@ -193,11 +201,11 @@ pub async fn create_matchmaking_rule(
 pub async fn run_matchmaking_loop(state: AppState) {
     loop {
         if let Err(error) = process_pending_matches(&state).await {
-            eprintln!("pending match loop error: {}", app_error_status(error));
+            eprintln!("pending match loop error: {:?}", error);
         }
 
         if let Err(error) = process_rules(&state).await {
-            eprintln!("matchmaking loop error: {}", app_error_status(error));
+            eprintln!("matchmaking loop error: {:?}", error);
         }
 
         tokio::time::sleep(Duration::from_millis(250)).await;
@@ -267,6 +275,10 @@ async fn matchmake_rule(state: &AppState, rule: &MatchmakingRule) -> Result<(), 
 
     state.matchmaking_store.save_pending_match(&pending_match).await?;
 
+    eprintln!(
+        "publishing match_found for match_id={} ticket_key={} players={:?}",
+        pending_match.id, pending_match.ticket_key, pending_match.player_ids
+    );
     publish_match_found_event(
         &state.nats_client,
         MatchFoundEvent {
@@ -296,6 +308,10 @@ async fn timeout_pending_match(
     nats_client: &Client,
     pending_match: &PendingMatch,
 ) -> Result<(), AppError> {
+    eprintln!(
+        "publishing match_timed_out for match_id={} players={:?}",
+        pending_match.id, pending_match.player_ids
+    );
     publish_match_timed_out_event(
         nats_client,
         MatchTimedOutEvent {
@@ -347,9 +363,4 @@ fn current_unix_timestamp() -> u64 {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs()
-}
-
-fn app_error_status(error: AppError) -> String {
-    let response = axum::response::IntoResponse::into_response(error);
-    response.status().to_string()
 }
