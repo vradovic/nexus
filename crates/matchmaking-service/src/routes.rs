@@ -1,6 +1,6 @@
 use axum::{
     Extension, Json, Router,
-    extract::State,
+    extract::{Path, State},
     http::StatusCode,
     middleware,
     routing::{get, post},
@@ -22,6 +22,8 @@ pub fn app_router(state: AppState) -> Router {
         .route("/join", post(join_matchmaking))
         .route("/status", get(get_matchmaking_status))
         .route("/leave", post(leave_matchmaking))
+        .route("/matches/{match_id}/confirm", post(confirm_match))
+        .route("/matches/{match_id}/decline", post(decline_match))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             require_player_role,
@@ -65,9 +67,13 @@ async fn get_matchmaking_status(
     State(state): State<AppState>,
     Extension(user): Extension<AuthenticatedUser>,
 ) -> Result<Json<MatchmakingStatusResponse>, AppError> {
-    let ticket = service::get_matchmaking_status(&state.matchmaking_store, user.user_id).await?;
+    let (ticket, pending_match) =
+        service::get_matchmaking_status(&state.matchmaking_store, user.user_id).await?;
 
-    Ok(Json(MatchmakingStatusResponse { ticket }))
+    Ok(Json(MatchmakingStatusResponse {
+        ticket,
+        pending_match,
+    }))
 }
 
 async fn leave_matchmaking(
@@ -75,6 +81,38 @@ async fn leave_matchmaking(
     Extension(user): Extension<AuthenticatedUser>,
 ) -> Result<StatusCode, AppError> {
     service::leave_matchmaking(&state.matchmaking_store, user.user_id).await?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn confirm_match(
+    State(state): State<AppState>,
+    Extension(user): Extension<AuthenticatedUser>,
+    Path(match_id): Path<uuid::Uuid>,
+) -> Result<StatusCode, AppError> {
+    service::confirm_match(
+        &state.matchmaking_store,
+        &state.nats_client,
+        user.user_id,
+        match_id,
+    )
+    .await?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn decline_match(
+    State(state): State<AppState>,
+    Extension(user): Extension<AuthenticatedUser>,
+    Path(match_id): Path<uuid::Uuid>,
+) -> Result<StatusCode, AppError> {
+    service::decline_match(
+        &state.matchmaking_store,
+        &state.nats_client,
+        user.user_id,
+        match_id,
+    )
+    .await?;
 
     Ok(StatusCode::NO_CONTENT)
 }

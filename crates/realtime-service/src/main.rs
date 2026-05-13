@@ -8,7 +8,10 @@ use std::net::SocketAddr;
 
 use app_state::AppState;
 use axum::Router;
-use messaging::{ensure_realtime_consumer, ensure_realtime_stream, start_match_found_consumer};
+use messaging::{
+    ensure_realtime_consumers, ensure_realtime_stream, start_match_confirmed_consumer,
+    start_match_declined_consumer, start_match_found_consumer, start_match_timed_out_consumer,
+};
 
 #[tokio::main]
 async fn main() {
@@ -22,11 +25,23 @@ async fn main() {
         .await
         .expect("failed to connect to nats");
     ensure_realtime_stream(&nats_client).await;
-    ensure_realtime_consumer(&nats_client).await;
+    ensure_realtime_consumers(&nats_client).await;
 
     let state = AppState::new(jwt_secret);
     let registry = state.connection_registry.clone();
-    tokio::spawn(start_match_found_consumer(nats_client, registry));
+    tokio::spawn(start_match_found_consumer(
+        nats_client.clone(),
+        registry.clone(),
+    ));
+    tokio::spawn(start_match_confirmed_consumer(
+        nats_client.clone(),
+        registry.clone(),
+    ));
+    tokio::spawn(start_match_declined_consumer(
+        nats_client.clone(),
+        registry.clone(),
+    ));
+    tokio::spawn(start_match_timed_out_consumer(nats_client, registry));
     let app: Router = routes::app_router(state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3004));

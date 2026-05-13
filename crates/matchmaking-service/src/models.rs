@@ -9,6 +9,16 @@ pub struct MatchmakingTicket {
     pub ticket_key: String,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PendingMatch {
+    pub id: Uuid,
+    pub rule_id: Uuid,
+    pub ticket_key: String,
+    pub player_ids: Vec<Uuid>,
+    pub confirmed_player_ids: Vec<Uuid>,
+    pub expires_at_unix_seconds: u64,
+}
+
 #[derive(Debug, Serialize, FromRow, Clone)]
 pub struct MatchmakingRule {
     pub id: Uuid,
@@ -30,4 +40,5 @@ pub struct CreateMatchmakingRuleRequest {
 #[derive(Debug, Serialize)]
 pub struct MatchmakingStatusResponse {
     pub ticket: Option<MatchmakingTicket>,
+    pub pending_match: Option<PendingMatch>,
 }

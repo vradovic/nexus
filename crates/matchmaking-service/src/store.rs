@@ -2,7 +2,7 @@ use nexus_shared::{AppError, read_json, write_json};
 use redis::{AsyncCommands, Client};
 use uuid::Uuid;
 
-use crate::models::MatchmakingTicket;
+use crate::models::{MatchmakingTicket, PendingMatch};
 
 #[derive(Clone)]
 pub struct MatchmakingStore {
@@ -38,7 +38,11 @@ impl MatchmakingStore {
         }
     }
 
-    pub async fn enqueue_ticket(&self, ticket_key_value: &str, ticket_id: Uuid) -> Result<(), AppError> {
+    pub async fn enqueue_ticket(
+        &self,
+        ticket_key_value: &str,
+        ticket_id: Uuid,
+    ) -> Result<(), AppError> {
         let queue_key = queue_key(ticket_key_value);
         let mut connection = self
             .redis_client
@@ -148,7 +152,133 @@ impl MatchmakingStore {
         Ok(())
     }
 
-    async fn save_player_ticket_mapping(&self, player_id: Uuid, ticket_id: Uuid) -> Result<(), AppError> {
+    pub async fn save_pending_match(&self, pending_match: &PendingMatch) -> Result<(), AppError> {
+        let match_key = pending_match_key(pending_match.id);
+        let ttl_seconds = pending_match_ttl_seconds(pending_match);
+
+        write_json(&self.redis_client, &match_key, pending_match).await?;
+
+        let mut connection = self
+            .redis_client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|_| AppError::internal("failed to connect to redis"))?;
+
+        connection
+            .expire::<String, ()>(match_key.clone(), ttl_seconds)
+            .await
+            .map_err(|_| AppError::internal("failed to set pending match ttl"))?;
+
+        connection
+            .sadd::<String, String, ()>(active_pending_matches_key(), pending_match.id.to_string())
+            .await
+            .map_err(|_| AppError::internal("failed to index pending match"))?;
+
+        for player_id in &pending_match.player_ids {
+            let player_match_key = player_pending_match_key(*player_id);
+
+            connection
+                .set::<String, String, ()>(player_match_key.clone(), pending_match.id.to_string())
+                .await
+                .map_err(|_| AppError::internal("failed to save player pending match mapping"))?;
+
+            connection
+                .expire::<String, ()>(player_match_key, ttl_seconds)
+                .await
+                .map_err(|_| AppError::internal("failed to set player pending match ttl"))?;
+        }
+
+        Ok(())
+    }
+
+    pub async fn find_pending_match_by_id(
+        &self,
+        match_id: Uuid,
+    ) -> Result<Option<PendingMatch>, AppError> {
+        read_json(&self.redis_client, &pending_match_key(match_id)).await
+    }
+
+    pub async fn find_pending_match_by_player_id(
+        &self,
+        player_id: Uuid,
+    ) -> Result<Option<PendingMatch>, AppError> {
+        let pending_match_id = self.find_pending_match_id_by_player_id(player_id).await?;
+
+        let Some(pending_match_id) = pending_match_id else {
+            return Ok(None);
+        };
+
+        let pending_match = self.find_pending_match_by_id(pending_match_id).await?;
+        if pending_match.is_none() {
+            self.delete_player_pending_match_mapping(player_id).await?;
+        }
+
+        Ok(pending_match)
+    }
+
+    pub async fn find_all_pending_matches(&self) -> Result<Vec<PendingMatch>, AppError> {
+        let mut connection = self
+            .redis_client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|_| AppError::internal("failed to connect to redis"))?;
+
+        let pending_match_ids = connection
+            .smembers::<String, Vec<String>>(active_pending_matches_key())
+            .await
+            .map_err(|_| AppError::internal("failed to read pending matches index"))?;
+
+        let mut pending_matches = Vec::new();
+        for pending_match_id in pending_match_ids {
+            let pending_match_id = Uuid::parse_str(&pending_match_id)
+                .map_err(|_| AppError::internal("stored pending match id is invalid"))?;
+
+            match self.find_pending_match_by_id(pending_match_id).await? {
+                Some(pending_match) => pending_matches.push(pending_match),
+                None => self
+                    .remove_pending_match_from_active_set(pending_match_id)
+                    .await?,
+            }
+        }
+
+        Ok(pending_matches)
+    }
+
+    pub async fn delete_pending_match(&self, pending_match: &PendingMatch) -> Result<(), AppError> {
+        let mut connection = self
+            .redis_client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|_| AppError::internal("failed to connect to redis"))?;
+
+        connection
+            .del::<String, ()>(pending_match_key(pending_match.id))
+            .await
+            .map_err(|_| AppError::internal("failed to delete pending match"))?;
+
+        connection
+            .srem::<String, String, ()>(
+                active_pending_matches_key(),
+                pending_match.id.to_string(),
+            )
+            .await
+            .map_err(|_| AppError::internal("failed to remove pending match from index"))?;
+
+        for player_id in &pending_match.player_ids {
+            connection
+                .del::<String, ()>(player_pending_match_key(*player_id))
+                .await
+                .map_err(|_| AppError::internal("failed to delete player pending match mapping"))?;
+        }
+
+        Ok(())
+    }
+
+    async fn save_player_ticket_mapping(
+        &self,
+        player_id: Uuid,
+        ticket_id: Uuid,
+    ) -> Result<(), AppError> {
         let mut connection = self
             .redis_client
             .get_multiplexed_async_connection()
@@ -182,6 +312,59 @@ impl MatchmakingStore {
             })
             .transpose()
     }
+
+    async fn find_pending_match_id_by_player_id(
+        &self,
+        player_id: Uuid,
+    ) -> Result<Option<Uuid>, AppError> {
+        let mut connection = self
+            .redis_client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|_| AppError::internal("failed to connect to redis"))?;
+
+        let pending_match_id = connection
+            .get::<String, Option<String>>(player_pending_match_key(player_id))
+            .await
+            .map_err(|_| AppError::internal("failed to read player pending match mapping"))?;
+
+        pending_match_id
+            .map(|pending_match_id| {
+                Uuid::parse_str(&pending_match_id)
+                    .map_err(|_| AppError::internal("stored pending match id is invalid"))
+            })
+            .transpose()
+    }
+
+    async fn delete_player_pending_match_mapping(&self, player_id: Uuid) -> Result<(), AppError> {
+        let mut connection = self
+            .redis_client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|_| AppError::internal("failed to connect to redis"))?;
+
+        connection
+            .del::<String, ()>(player_pending_match_key(player_id))
+            .await
+            .map_err(|_| AppError::internal("failed to delete player pending match mapping"))?;
+
+        Ok(())
+    }
+
+    async fn remove_pending_match_from_active_set(&self, match_id: Uuid) -> Result<(), AppError> {
+        let mut connection = self
+            .redis_client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|_| AppError::internal("failed to connect to redis"))?;
+
+        connection
+            .srem::<String, String, ()>(active_pending_matches_key(), match_id.to_string())
+            .await
+            .map_err(|_| AppError::internal("failed to remove stale pending match from index"))?;
+
+        Ok(())
+    }
 }
 
 fn ticket_key(ticket_id: Uuid) -> String {
@@ -194,4 +377,29 @@ fn player_ticket_key(player_id: Uuid) -> String {
 
 fn queue_key(ticket_key_value: &str) -> String {
     format!("matchmaking:queues:{ticket_key_value}")
+}
+
+fn pending_match_key(match_id: Uuid) -> String {
+    format!("matchmaking:pending_matches:{match_id}")
+}
+
+fn player_pending_match_key(player_id: Uuid) -> String {
+    format!("matchmaking:pending_match_player:{player_id}")
+}
+
+fn active_pending_matches_key() -> String {
+    "matchmaking:pending_matches:active".to_string()
+}
+
+fn pending_match_ttl_seconds(pending_match: &PendingMatch) -> i64 {
+    let now = current_unix_timestamp();
+    let ttl = pending_match.expires_at_unix_seconds.saturating_sub(now);
+    if ttl == 0 { 1 } else { ttl as i64 }
+}
+
+fn current_unix_timestamp() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
 }
