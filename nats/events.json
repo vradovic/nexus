@@ -1,0 +1,10 @@
+{
+    "name": "EVENTS",
+    "subjects": [
+        "event.>"
+    ],
+    "storage": "file",
+    "retention": "limits",
+    "max_age": 86400000000000,
+    "num_replicas": 1
+}

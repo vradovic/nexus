@@ -43,6 +43,14 @@ services:
       - "4222:4222"
       - "8222:8222"
 
+  nats-box:
+    image: natsio/nats-box:latest
+    depends_on:
+      - nats
+    volumes:
+      - ./nats:/nats:ro
+    command: ["sh", "/nats/script.sh"]
+
   redis:
     image: redis:8-alpine
     restart: unless-stopped

@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/auth-service",
+    "crates/game-service",
     "crates/integration-tests",
     "crates/matchmaking-service",
     "crates/nexus-shared",
