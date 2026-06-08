@@ -1,0 +1,31 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "auth-db",
+      "Group": "Nexus",
+      "Host": "auth-db",
+      "Port": 5432,
+      "MaintenanceDB": "auth_db",
+      "Username": "postgres",
+      "SSLMode": "prefer"
+    },
+    "2": {
+      "Name": "users-db",
+      "Group": "Nexus",
+      "Host": "users-db",
+      "Port": 5432,
+      "MaintenanceDB": "users_db",
+      "Username": "postgres",
+      "SSLMode": "prefer"
+    },
+    "3": {
+      "Name": "matchmaking-db",
+      "Group": "Nexus",
+      "Host": "matchmaking-db",
+      "Port": 5432,
+      "MaintenanceDB": "matchmaking_db",
+      "Username": "postgres",
+      "SSLMode": "prefer"
+    }
+  }
+}

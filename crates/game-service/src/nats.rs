@@ -1,33 +1,35 @@
 use async_nats::{Client, jetstream};
 use futures_util::StreamExt;
-use nexus_shared::ensure_pull_consumer;
 
-pub const EVENTS_STREAM: &str = "EVENTS";
-pub const GAME_EVENTS_FILTER: &str = "event.game.>";
+use crate::rhai::{Event, HookResult};
 
-const GAME_EVENTS_CONSUMER: &str = "game-service-events";
+const EVENTS_STREAM: &str = "EVENTS";
+const EVENTS_FILTER: &str = "events.>";
+const EVENTS_CONSUMER: &str = "game-service";
 
-pub async fn ensure_game_events_consumer(nats_client: &Client) {
-    ensure_pull_consumer(
-        nats_client,
-        EVENTS_STREAM,
-        GAME_EVENTS_CONSUMER,
-        GAME_EVENTS_FILTER,
-    )
-    .await
-    .expect("failed to create or get game events consumer");
-}
-
-pub async fn start_game_events_consumer(nats_client: Client) {
+pub async fn start_consumer<F>(nats_client: Client, event_handler: F)
+where
+    F: Fn(Event) -> HookResult,
+{
     let jetstream = jetstream::new(nats_client);
+
     let stream = jetstream
         .get_stream(EVENTS_STREAM)
         .await
         .expect("failed to get events stream");
-    let consumer = stream
-        .get_consumer::<jetstream::consumer::pull::Config>(GAME_EVENTS_CONSUMER)
+
+    let consumer: jetstream::consumer::Consumer<jetstream::consumer::pull::Config> = stream
+        .get_or_create_consumer::<jetstream::consumer::pull::Config>(
+            EVENTS_CONSUMER,
+            jetstream::consumer::pull::Config {
+                durable_name: Some(EVENTS_CONSUMER.to_string()),
+                filter_subject: EVENTS_FILTER.to_string(),
+                ..Default::default()
+            },
+        )
         .await
         .expect("failed to get game events consumer");
+
     let mut messages = consumer
         .messages()
         .await
@@ -42,11 +44,15 @@ pub async fn start_game_events_consumer(nats_client: Client) {
             }
         };
 
-        println!(
-            "game-service received {}: {}",
-            message.subject,
-            String::from_utf8_lossy(&message.payload)
-        );
+        let event = Event {
+            subject: message.subject.to_string(),
+            payload: message.payload.clone(),
+        };
+
+        if let Err(error) = event_handler(event) {
+            eprintln!("failed to handle game event: {}", error);
+            continue;
+        }
 
         if let Err(error) = message.ack().await {
             eprintln!("failed to ack game event: {}", error);

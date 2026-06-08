@@ -48,7 +48,7 @@ services:
     depends_on:
       - nats
     volumes:
-      - ./nats:/nats:ro
+      - ./docker/nats:/nats:ro
     command: ["sh", "/nats/script.sh"]
 
   redis:
@@ -57,7 +57,37 @@ services:
     ports:
       - "6379:6379"
 
+  redisinsight:
+    image: redis/redisinsight:latest
+    restart: unless-stopped
+    depends_on:
+      - redis
+    ports:
+      - "5540:5540"
+    volumes:
+      - redisinsight_data:/data
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    restart: unless-stopped
+    depends_on:
+      - auth-db
+      - users-db
+      - matchmaking-db
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@nexus.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_SERVER_JSON_FILE: /pgadmin4/servers.json
+      PGADMIN_REPLACE_SERVERS_ON_STARTUP: "True"
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./docker/pgadmin/servers.json:/pgadmin4/servers.json:ro
+
 volumes:
   auth_pgdata:
   matchmaking_pgdata:
+  pgadmin_data:
+  redisinsight_data:
   users_pgdata:

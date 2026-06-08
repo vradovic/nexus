@@ -1,4 +1,7 @@
+use crate::rhai::ScriptEngine;
+
 mod nats;
+mod rhai;
 
 #[tokio::main]
 async fn main() {
@@ -10,18 +13,12 @@ async fn main() {
         .await
         .expect("failed to connect to nats");
 
-    nats::ensure_game_events_consumer(&nats_client).await;
+    let script_path =
+        std::env::var("GAME_SCRIPT_PATH").unwrap_or_else(|_| rhai::DEFAULT_SCRIPT_PATH.to_string());
 
-    println!(
-        "game-service consuming '{}' from stream '{}'",
-        nats::GAME_EVENTS_FILTER,
-        nats::EVENTS_STREAM
-    );
+    let engine = ScriptEngine::new(&script_path);
 
-    let consumer_task = tokio::spawn(nats::start_game_events_consumer(nats_client));
-    consumer_task
-        .await
-        .expect("game events consumer task failed");
+    nats::start_consumer(nats_client, move |event| engine.handle_event(event)).await;
 }
 
 fn load_env() {

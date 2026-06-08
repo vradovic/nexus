@@ -1,7 +1,7 @@
 {
     "name": "COMMANDS",
     "subjects": [
-        "command.>"
+        "commands.>"
     ],
     "storage": "file",
     "retention": "limits",

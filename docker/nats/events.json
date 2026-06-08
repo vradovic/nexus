@@ -1,7 +1,7 @@
 {
     "name": "EVENTS",
     "subjects": [
-        "event.>"
+        "events.>"
     ],
     "storage": "file",
     "retention": "limits",
