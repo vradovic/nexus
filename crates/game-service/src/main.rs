@@ -1,5 +1,6 @@
 use crate::rhai::ScriptEngine;
 
+mod mappings;
 mod nats;
 mod rhai;
 

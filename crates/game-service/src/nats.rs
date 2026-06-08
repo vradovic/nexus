@@ -1,7 +1,7 @@
 use async_nats::{Client, jetstream};
 use futures_util::StreamExt;
 
-use crate::rhai::{Event, HookResult};
+use crate::{rhai::Event, rhai::HookResult};
 
 const EVENTS_STREAM: &str = "EVENTS";
 const EVENTS_FILTER: &str = "events.>";
@@ -51,7 +51,6 @@ where
 
         if let Err(error) = event_handler(event) {
             eprintln!("failed to handle game event: {}", error);
-            continue;
         }
 
         if let Err(error) = message.ack().await {

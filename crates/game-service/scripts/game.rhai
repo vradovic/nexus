@@ -1,7 +1,7 @@
-fn on_hello_world(name) {
-    return "hello " + name;
+fn on_hello_world(payload) {
+    print("hello " + payload.name);
 }
 
-fn on_foo() {
-    return "bar";
+fn on_foo(payload) {
+    print("bar");
 }
