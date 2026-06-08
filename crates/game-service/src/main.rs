@@ -1,8 +1,9 @@
-use crate::rhai::ScriptEngine;
+use crate::game::Game;
 
+mod engine;
+mod game;
 mod mappings;
 mod nats;
-mod rhai;
 
 #[tokio::main]
 async fn main() {
@@ -18,14 +19,15 @@ async fn main() {
         .expect("failed to connect to nats");
     tracing::info!("connected to nats");
 
-    let script_path =
-        std::env::var("GAME_SCRIPT_PATH").unwrap_or_else(|_| rhai::DEFAULT_SCRIPT_PATH.to_string());
+    let script_path = std::env::var("GAME_SCRIPT_PATH")
+        .unwrap_or_else(|_| engine::DEFAULT_SCRIPT_PATH.to_string());
     tracing::debug!(script_path, "initializing script engine");
 
-    let engine = ScriptEngine::new(&script_path);
+    let mut game = Game::new(nats_client, &script_path)
+        .await
+        .expect("failed to initialize game");
 
-    tracing::info!("starting game event consumer");
-    nats::start_consumer(nats_client, move |event| engine.handle_event(event)).await;
+    game.run().await.expect("game loop failed");
 }
 
 fn load_env() {

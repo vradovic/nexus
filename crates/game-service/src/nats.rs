@@ -1,83 +1,106 @@
-use async_nats::{Client, jetstream};
+use async_nats::{
+    Client, jetstream,
+    jetstream::{consumer::pull, message::Acker},
+};
 use futures_util::StreamExt;
-
-use crate::{rhai::Event, rhai::HookResult};
 
 const EVENTS_STREAM: &str = "EVENTS";
 const EVENTS_FILTER: &str = "events.>";
 const EVENTS_CONSUMER: &str = "game-service";
+const COMMANDS_STREAM: &str = "COMMANDS";
+const COMMANDS_FILTER: &str = "commands.>";
 
-pub async fn start_consumer<F>(nats_client: Client, event_handler: F)
-where
-    F: Fn(Event) -> HookResult,
-{
-    tracing::info!(
-        stream = EVENTS_STREAM,
-        consumer = EVENTS_CONSUMER,
-        filter = EVENTS_FILTER,
-        "starting nats consumer"
-    );
+pub struct NatsEventMessage {
+    pub subject: String,
+    pub payload: Vec<u8>,
+    pub acker: Acker,
+}
 
-    let jetstream = jetstream::new(nats_client);
+pub struct NatsEventReader {
+    messages: pull::Stream,
+}
 
-    let stream = jetstream
-        .get_stream(EVENTS_STREAM)
-        .await
-        .expect("failed to get events stream");
+pub struct NatsCommandWriter {
+    jetstream: jetstream::Context,
+}
 
-    let consumer: jetstream::consumer::Consumer<jetstream::consumer::pull::Config> = stream
-        .get_or_create_consumer::<jetstream::consumer::pull::Config>(
-            EVENTS_CONSUMER,
-            jetstream::consumer::pull::Config {
-                durable_name: Some(EVENTS_CONSUMER.to_string()),
-                filter_subject: EVENTS_FILTER.to_string(),
-                ..Default::default()
-            },
-        )
-        .await
-        .expect("failed to get game events consumer");
+impl NatsEventReader {
+    pub async fn new(nats_client: Client) -> Result<Self, Box<dyn std::error::Error>> {
+        tracing::info!(
+            stream = EVENTS_STREAM,
+            consumer = EVENTS_CONSUMER,
+            filter = EVENTS_FILTER,
+            "starting nats consumer"
+        );
 
-    tracing::info!(
-        stream = EVENTS_STREAM,
-        consumer = EVENTS_CONSUMER,
-        filter = EVENTS_FILTER,
-        "nats consumer ready"
-    );
+        let jetstream = jetstream::new(nats_client);
 
-    let mut messages = consumer
-        .messages()
-        .await
-        .expect("failed to open game events consumer messages");
+        let stream = jetstream.get_stream(EVENTS_STREAM).await?;
 
-    while let Some(message_result) = messages.next().await {
-        let message = match message_result {
-            Ok(message) => message,
-            Err(error) => {
-                tracing::error!(error = %error, "failed to receive game event");
-                continue;
-            }
+        let consumer: jetstream::consumer::Consumer<jetstream::consumer::pull::Config> = stream
+            .get_or_create_consumer::<jetstream::consumer::pull::Config>(
+                EVENTS_CONSUMER,
+                jetstream::consumer::pull::Config {
+                    durable_name: Some(EVENTS_CONSUMER.to_string()),
+                    filter_subject: EVENTS_FILTER.to_string(),
+                    ..Default::default()
+                },
+            )
+            .await?;
+
+        tracing::info!(
+            stream = EVENTS_STREAM,
+            consumer = EVENTS_CONSUMER,
+            filter = EVENTS_FILTER,
+            "nats consumer ready"
+        );
+
+        let messages = consumer.messages().await?;
+
+        Ok(Self { messages })
+    }
+
+    pub async fn read_message(
+        &mut self,
+    ) -> Result<Option<NatsEventMessage>, Box<dyn std::error::Error>> {
+        let Some(message) = self.messages.next().await else {
+            return Ok(None);
         };
 
-        let event = Event {
-            subject: message.subject.to_string(),
-            payload: message.payload.clone(),
-        };
+        let (message, acker) = message?.split();
 
         tracing::debug!(
-            subject = %event.subject,
-            payload_size = event.payload.len(),
+            subject = %message.subject,
+            payload_size = message.payload.len(),
             "received game event"
         );
 
-        if let Err(error) = event_handler(event) {
-            tracing::error!(error = %error, "failed to handle game event");
-            continue;
-        }
+        Ok(Some(NatsEventMessage {
+            subject: message.subject.into_string(),
+            payload: message.payload.to_vec(),
+            acker,
+        }))
+    }
+}
 
-        if let Err(error) = message.ack().await {
-            tracing::error!(error = %error, "failed to ack game event");
-        } else {
-            tracing::debug!("acked game event");
-        }
+impl NatsCommandWriter {
+    pub async fn new(nats_client: Client) -> Result<Self, Box<dyn std::error::Error>> {
+        let jetstream = jetstream::new(nats_client);
+
+        jetstream
+            .create_or_update_stream(jetstream::stream::Config {
+                name: COMMANDS_STREAM.to_string(),
+                subjects: vec![COMMANDS_FILTER.to_string()],
+                ..Default::default()
+            })
+            .await?;
+
+        tracing::info!(
+            stream = COMMANDS_STREAM,
+            filter = COMMANDS_FILTER,
+            "nats command writer ready"
+        );
+
+        Ok(Self { jetstream })
     }
 }
