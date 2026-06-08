@@ -11,6 +11,13 @@ pub async fn start_consumer<F>(nats_client: Client, event_handler: F)
 where
     F: Fn(Event) -> HookResult,
 {
+    tracing::info!(
+        stream = EVENTS_STREAM,
+        consumer = EVENTS_CONSUMER,
+        filter = EVENTS_FILTER,
+        "starting nats consumer"
+    );
+
     let jetstream = jetstream::new(nats_client);
 
     let stream = jetstream
@@ -30,6 +37,13 @@ where
         .await
         .expect("failed to get game events consumer");
 
+    tracing::info!(
+        stream = EVENTS_STREAM,
+        consumer = EVENTS_CONSUMER,
+        filter = EVENTS_FILTER,
+        "nats consumer ready"
+    );
+
     let mut messages = consumer
         .messages()
         .await
@@ -39,7 +53,7 @@ where
         let message = match message_result {
             Ok(message) => message,
             Err(error) => {
-                eprintln!("failed to receive game event: {}", error);
+                tracing::error!(error = %error, "failed to receive game event");
                 continue;
             }
         };
@@ -49,12 +63,21 @@ where
             payload: message.payload.clone(),
         };
 
+        tracing::debug!(
+            subject = %event.subject,
+            payload_size = event.payload.len(),
+            "received game event"
+        );
+
         if let Err(error) = event_handler(event) {
-            eprintln!("failed to handle game event: {}", error);
+            tracing::error!(error = %error, "failed to handle game event");
+            continue;
         }
 
         if let Err(error) = message.ack().await {
-            eprintln!("failed to ack game event: {}", error);
+            tracing::error!(error = %error, "failed to ack game event");
+        } else {
+            tracing::debug!("acked game event");
         }
     }
 }
