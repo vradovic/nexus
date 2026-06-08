@@ -1,5 +1,6 @@
 use crate::game::Game;
 
+mod commands;
 mod engine;
 mod game;
 mod mappings;

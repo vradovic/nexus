@@ -1,7 +1,7 @@
-fn on_hello_world(payload) {
+fn on_hello_world(payload, api) {
     print("hello " + payload.name);
 }
 
 fn on_foo(payload, api) {
-    print("bar");
+    api.broadcast("baz");
 }
