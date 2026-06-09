@@ -1,55 +1,24 @@
-mod app_state;
-mod connection_registry;
-mod messaging;
-mod models;
-mod routes;
+mod app;
 
-use std::net::SocketAddr;
-
-use app_state::AppState;
-use axum::Router;
-use messaging::{
-    ensure_realtime_consumers, ensure_realtime_stream, start_match_confirmed_consumer,
-    start_match_declined_consumer, start_match_found_consumer, start_match_timed_out_consumer,
-};
+use tokio::net::TcpListener;
+use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() {
-    dotenvy::dotenv().ok();
+    dotenvy::from_path(concat!(env!("CARGO_MANIFEST_DIR"), "/.env")).ok();
 
-    let jwt_secret =
-        std::env::var("JWT_SECRET").expect("JWT_SECRET must be set before starting realtime-service");
-    let nats_url =
-        std::env::var("NATS_URL").expect("NATS_URL must be set before starting realtime-service");
-    let nats_client = async_nats::connect(nats_url)
-        .await
-        .expect("failed to connect to nats");
-    ensure_realtime_stream(&nats_client).await;
-    ensure_realtime_consumers(&nats_client).await;
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("debug")),
+        )
+        .init();
 
-    let state = AppState::new(jwt_secret);
-    let registry = state.connection_registry.clone();
-    tokio::spawn(start_match_found_consumer(
-        nats_client.clone(),
-        registry.clone(),
-    ));
-    tokio::spawn(start_match_confirmed_consumer(
-        nats_client.clone(),
-        registry.clone(),
-    ));
-    tokio::spawn(start_match_declined_consumer(
-        nats_client.clone(),
-        registry.clone(),
-    ));
-    tokio::spawn(start_match_timed_out_consumer(nats_client, registry));
-    let app: Router = routes::app_router(state);
+    let address = dotenvy::var("SERVICE_ADDRESS").unwrap();
+    let listener = TcpListener::bind(&address).await.unwrap();
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3004));
-    let listener = tokio::net::TcpListener::bind(addr)
-        .await
-        .expect("failed to bind TCP listener");
+    let app = app::build_router();
 
-    println!("realtime-service listening on ws://{}", addr);
+    tracing::info!(address=%address, "realtime-service started");
 
-    axum::serve(listener, app).await.expect("server failed");
+    axum::serve(listener, app).await.unwrap();
 }
