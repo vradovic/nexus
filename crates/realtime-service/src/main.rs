@@ -1,4 +1,5 @@
 mod app;
+mod rooms;
 
 use tokio::net::TcpListener;
 use tracing_subscriber::EnvFilter;
