@@ -1,5 +1,5 @@
 mod app;
-mod rooms;
+mod messaging;
 
 use tokio::net::TcpListener;
 use tracing_subscriber::EnvFilter;
