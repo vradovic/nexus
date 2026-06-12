@@ -1,32 +1,37 @@
-use crate::{
-    engine,
-    nats::{self, NatsCommandMessage},
-};
+use crate::engine;
+use nexus_shared::nats::{MessageReader, NatsAdapter, NatsCommandMessage};
 use std::error::Error;
 
+const EVENTS_CONSUMER: &str = "game-service";
+
 pub struct Game {
-    nats: nats::NatsAdapter,
+    nats: NatsAdapter,
+    events: MessageReader,
     engine: engine::ScriptEngine,
 }
 
 impl Game {
-    pub async fn new(
-        nats_client: async_nats::Client,
-        script_path: &str,
-    ) -> Result<Self, Box<dyn Error>> {
-        let nats = nats::NatsAdapter::new(nats_client).await?;
+    pub async fn new(nats: NatsAdapter, script_path: &str) -> Result<Self, Box<dyn Error>> {
+        let events = nats.events_reader(EVENTS_CONSUMER).await?;
         let engine = engine::ScriptEngine::new(script_path);
 
-        Ok(Self { nats, engine })
+        Ok(Self {
+            nats,
+            events,
+            engine,
+        })
     }
 
     pub async fn run(&mut self) -> Result<(), Box<dyn Error>> {
         tracing::info!("started game loop");
 
-        while let Some(message) = self.nats.read_events().await? {
-            tracing::info!(message = %message.subject, "received new message");
+        while let Some(message) = self.events.next().await? {
+            tracing::info!(message = %message.subject(), "received new message");
 
-            let commands = match self.engine.handle_event(&message.subject, &message.payload) {
+            let commands = match self
+                .engine
+                .handle_event(message.subject(), message.payload())
+            {
                 Ok(commands) => commands
                     .into_iter()
                     .map(|c| NatsCommandMessage {
@@ -45,7 +50,7 @@ impl Game {
                 continue;
             }
 
-            nats::ack_message(message.acker).await?;
+            message.ack().await?;
         }
 
         Ok(())

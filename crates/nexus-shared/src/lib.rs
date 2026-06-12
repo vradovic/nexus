@@ -2,6 +2,7 @@ pub mod auth;
 pub mod error;
 pub mod matchmaking;
 pub mod messaging;
+pub mod nats;
 pub mod redis_store;
 
 pub use auth::{
