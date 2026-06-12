@@ -46,11 +46,10 @@ impl ScriptEngine {
             subject = %subject,
             hook,
             payload_size = payload.len(),
-            payload = %String::from_utf8_lossy(payload),
-            "deserializing game event payload"
+            "calling game hook with binary payload"
         );
 
-        let payload: Dynamic = serde_json::from_slice(payload)?;
+        let payload = Dynamic::from_blob(payload.to_vec());
 
         tracing::debug!(subject = %subject, hook, "calling game hook");
 

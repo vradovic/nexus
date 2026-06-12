@@ -21,10 +21,14 @@ impl CommandApi {
     pub fn broadcast(&mut self, message: rhai::Dynamic) -> Result<(), Box<EvalAltResult>> {
         let subject = "commands.broadcast".to_string();
 
-        let val = rhai::serde::from_dynamic::<serde_json::Value>(&message)?;
+        let payload = if let Some(blob) = message.clone().try_cast::<rhai::Blob>() {
+            blob
+        } else {
+            let val = rhai::serde::from_dynamic::<serde_json::Value>(&message)?;
 
-        let payload = serde_json::to_vec(&val)
-            .map_err(|error| format!("failed to serialize payload: {error}"))?;
+            serde_json::to_vec(&val)
+                .map_err(|error| format!("failed to serialize payload: {error}"))?
+        };
 
         self.commands
             .borrow_mut()

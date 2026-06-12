@@ -10,23 +10,39 @@ use axum::{
     routing::get,
 };
 use futures_util::{SinkExt, StreamExt};
+use nexus_shared::nats::NatsAdapter;
 use tokio::sync::{Mutex, mpsc};
 use tower_http::trace::TraceLayer;
 use uuid::Uuid;
 
 use crate::messaging::{DEFAULT_ROOM_ID, MessageRouter};
 
-#[derive(Default)]
+const REALTIME_MESSAGE_EVENT_SUBJECT: &str = "events.realtime.message";
+
 pub struct AppState {
-    message_router: Mutex<MessageRouter>,
+    message_router: Arc<Mutex<MessageRouter>>,
+    nats: NatsAdapter,
 }
 
-pub fn build_router() -> Router {
+impl AppState {
+    pub fn new(nats: NatsAdapter) -> Self {
+        Self {
+            message_router: Arc::new(Mutex::new(MessageRouter::default())),
+            nats,
+        }
+    }
+
+    pub fn message_router(&self) -> Arc<Mutex<MessageRouter>> {
+        Arc::clone(&self.message_router)
+    }
+}
+
+pub fn build_router(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/health", get(handle_health))
         .route("/ws", get(handle_ws))
         .layer(TraceLayer::new_for_http())
-        .with_state(Arc::new(AppState::default()))
+        .with_state(state)
 }
 
 async fn handle_health() -> &'static str {
@@ -68,6 +84,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
             }
         };
 
+        publish_client_message(conn_id, &state, &msg).await;
         tracing::debug!(?msg, "received websocket message");
     }
 
@@ -77,4 +94,20 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     }
     writer_task.abort();
     tracing::debug!(%conn_id, "websocket connection removed");
+}
+
+async fn publish_client_message(conn_id: Uuid, state: &AppState, msg: &Message) {
+    let payload = match msg {
+        Message::Text(text) => text.as_str().as_bytes().to_vec(),
+        Message::Binary(bytes) => bytes.to_vec(),
+        Message::Close(_) | Message::Ping(_) | Message::Pong(_) => return,
+    };
+
+    if let Err(error) = state
+        .nats
+        .publish(REALTIME_MESSAGE_EVENT_SUBJECT.to_string(), payload.into())
+        .await
+    {
+        tracing::error!(%error, %conn_id, "failed to publish client message event");
+    }
 }

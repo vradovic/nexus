@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use axum::{body::Bytes, extract::ws::Message};
+use axum::extract::ws::Message;
 use thiserror::Error;
 use tokio::sync::mpsc::UnboundedSender;
 use uuid::Uuid;
@@ -20,8 +20,6 @@ pub struct MessageRouter {
 
 #[derive(Debug, Error)]
 pub enum MessagingError {
-    #[error("room {room_id} not found")]
-    RoomNotFound { room_id: String },
     #[error("connection {conn_id} not found")]
     ConnectionNotFound { conn_id: ConnectionId },
 }
@@ -56,8 +54,12 @@ impl MessageRouter {
         }
     }
 
-    pub fn send_to_room(&mut self, room_id: &str, payload: Bytes) -> Result<(), MessagingError> {
-        let conn_ids = self.get_room(room_id)?.iter().copied().collect::<Vec<_>>();
+    pub fn broadcast(&mut self, message: Message) {
+        let conn_ids = self.connections.keys().copied().collect::<Vec<_>>();
+        self.send_to_connections(conn_ids, message);
+    }
+
+    fn send_to_connections(&mut self, conn_ids: Vec<ConnectionId>, message: Message) {
         let mut stale_conns = Vec::<ConnectionId>::new();
 
         for conn_id in conn_ids {
@@ -69,7 +71,7 @@ impl MessageRouter {
                 }
             };
 
-            if let Err(error) = tx.send(payload.clone().into()) {
+            if let Err(error) = tx.send(message.clone()) {
                 tracing::error!(%error, "failed to write to channel");
                 stale_conns.push(conn_id);
             }
@@ -78,8 +80,6 @@ impl MessageRouter {
         for conn_id in stale_conns {
             self.remove_connection(conn_id);
         }
-
-        Ok(())
     }
 
     pub fn join_room(
@@ -91,7 +91,7 @@ impl MessageRouter {
             return Err(MessagingError::ConnectionNotFound { conn_id });
         }
 
-        let room = self.get_room_mut(room_id)?;
+        let room = self.rooms.entry(room_id.to_string()).or_default();
         room.insert(conn_id);
 
         self.connection_rooms
@@ -100,41 +100,6 @@ impl MessageRouter {
             .insert(room_id.to_string());
 
         Ok(())
-    }
-
-    pub fn leave_room(
-        &mut self,
-        conn_id: ConnectionId,
-        room_id: &str,
-    ) -> Result<(), MessagingError> {
-        self.get_room_mut(room_id)?.remove(&conn_id);
-
-        if let Some(room_ids) = self.connection_rooms.get_mut(&conn_id) {
-            room_ids.remove(room_id);
-        }
-
-        Ok(())
-    }
-
-    pub fn create_room(&mut self, room_id: &str) {
-        self.rooms.entry(room_id.to_string()).or_default();
-    }
-
-    fn get_room(&self, room_id: &str) -> Result<&HashSet<ConnectionId>, MessagingError> {
-        self.rooms.get(room_id).ok_or(MessagingError::RoomNotFound {
-            room_id: room_id.to_string(),
-        })
-    }
-
-    fn get_room_mut(
-        &mut self,
-        room_id: &str,
-    ) -> Result<&mut HashSet<ConnectionId>, MessagingError> {
-        self.rooms
-            .get_mut(room_id)
-            .ok_or(MessagingError::RoomNotFound {
-                room_id: room_id.to_string(),
-            })
     }
 }
 
