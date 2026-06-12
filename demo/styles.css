@@ -1,0 +1,266 @@
+:root {
+  color-scheme: light;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  background: #f3f5f7;
+  color: #1c222b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid #1f2630;
+  border-radius: 6px;
+  background: #1f2630;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #303946;
+}
+
+input {
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid #c7ced8;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #1c222b;
+}
+
+.shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.toolbar {
+  min-height: 72px;
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(320px, 520px) minmax(280px, auto);
+  gap: 16px;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid #dbe1ea;
+  background: #ffffff;
+}
+
+.identity {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+}
+
+.swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  box-shadow: inset 0 0 0 2px rgb(255 255 255 / 75%), 0 0 0 1px #c6ced8;
+}
+
+h1,
+h2,
+p,
+dl,
+ol {
+  margin: 0;
+}
+
+h1 {
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+h2 {
+  font-size: 13px;
+  line-height: 1.2;
+  text-transform: uppercase;
+  color: #66717f;
+  margin-bottom: 8px;
+}
+
+.identity p {
+  margin-top: 3px;
+  color: #6d7786;
+  font-size: 13px;
+}
+
+.connect-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.connect-form label {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: #5f6978;
+}
+
+.toolbar-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.toolbar-actions button {
+  background: #ffffff;
+  color: #1f2630;
+}
+
+.toolbar-actions button:hover {
+  background: #eef2f6;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 8px;
+  font-size: 13px;
+  color: #4f5b6b;
+  white-space: nowrap;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #9aa4b1;
+}
+
+.status-dot.connected {
+  background: #23845b;
+}
+
+.status-dot.connecting {
+  background: #b77919;
+}
+
+.stage {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+}
+
+.board-stage {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  padding: clamp(16px, 4vw, 42px);
+  background:
+    linear-gradient(90deg, rgb(255 255 255 / 55%) 1px, transparent 1px),
+    linear-gradient(rgb(255 255 255 / 55%) 1px, transparent 1px),
+    #e8edf2;
+  background-size: 32px 32px;
+}
+
+.board-shell {
+  width: min(74vmin, 720px);
+  max-width: 100%;
+  aspect-ratio: 1;
+  border: 1px solid #29313d;
+  box-shadow: 0 20px 50px rgb(31 38 48 / 18%);
+  background: #ffffff;
+}
+
+#board {
+  width: 100%;
+}
+
+.panel {
+  display: grid;
+  align-content: start;
+  gap: 22px;
+  padding: 16px;
+  border-left: 1px solid #dbe1ea;
+  background: #ffffff;
+  overflow: auto;
+}
+
+#log {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+  font-size: 13px;
+}
+
+#log li {
+  padding: 8px;
+  border: 1px solid #e1e6ee;
+  border-radius: 6px;
+  background: #fbfcfe;
+  color: #343d4a;
+}
+
+dl {
+  display: grid;
+  gap: 10px;
+}
+
+dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 13px;
+}
+
+dt {
+  color: #6d7786;
+}
+
+dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+@media (max-width: 860px) {
+  .toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .toolbar-actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .stage {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(360px, 1fr) auto;
+  }
+
+  .panel {
+    border-left: 0;
+    border-top: 1px solid #dbe1ea;
+  }
+
+  .board-shell {
+    width: min(92vw, 640px);
+  }
+}

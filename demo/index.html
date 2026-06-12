@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nexus Chess Demo</title>
+  </head>
+  <body>
+    <div class="shell">
+      <header class="toolbar">
+        <div class="identity">
+          <span id="client-color" class="swatch" aria-hidden="true"></span>
+          <div>
+            <h1>Nexus Chess</h1>
+            <p id="client-label"></p>
+          </div>
+        </div>
+
+        <form id="connect-form" class="connect-form">
+          <label>
+            WebSocket URL
+            <input id="ws-url" type="url" autocomplete="off" spellcheck="false" />
+          </label>
+          <button id="connect-button" type="submit">Connect</button>
+        </form>
+
+        <div class="toolbar-actions">
+          <button id="flip-button" type="button">Flip</button>
+          <button id="reset-button" type="button">Reset</button>
+          <div class="status" aria-live="polite">
+            <span id="status-dot" class="status-dot"></span>
+            <span id="status-text">Disconnected</span>
+          </div>
+        </div>
+      </header>
+
+      <main class="stage">
+        <section class="board-stage" aria-label="Shared chess board">
+          <div class="board-shell">
+            <div id="board"></div>
+          </div>
+        </section>
+
+        <aside class="panel">
+          <section>
+            <h2>Session</h2>
+            <dl>
+              <div>
+                <dt>Board</dt>
+                <dd id="position-label">start</dd>
+              </div>
+              <div>
+                <dt>Last event</dt>
+                <dd id="last-event">none</dd>
+              </div>
+              <div>
+                <dt>Moves</dt>
+                <dd id="move-count">0</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section>
+            <h2>Events</h2>
+            <ol id="log"></ol>
+          </section>
+        </aside>
+      </main>
+    </div>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

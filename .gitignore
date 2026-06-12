@@ -1,3 +1,5 @@
 target/
 .env
 bruno
+node_modules/
+demo/dist/
