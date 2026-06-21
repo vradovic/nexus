@@ -1,6 +1,8 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use rhai::EvalAltResult;
+use rhai::{Dynamic, EvalAltResult};
+
+pub type StateStore = Rc<RefCell<HashMap<String, Dynamic>>>;
 
 #[derive(Clone)]
 pub struct Command {
@@ -8,17 +10,21 @@ pub struct Command {
     pub payload: Vec<u8>,
 }
 
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct CommandApi {
     commands: Rc<RefCell<Vec<Command>>>,
+    state: StateStore,
 }
 
 impl CommandApi {
-    pub fn new() -> Self {
-        Default::default()
+    pub fn new(state: StateStore) -> Self {
+        Self {
+            commands: Default::default(),
+            state,
+        }
     }
 
-    pub fn broadcast(&mut self, message: rhai::Dynamic) -> Result<(), Box<EvalAltResult>> {
+    pub fn broadcast(&mut self, message: Dynamic) -> Result<(), Box<EvalAltResult>> {
         let subject = "commands.broadcast".to_string();
 
         let payload = if let Some(blob) = message.clone().try_cast::<rhai::Blob>() {
@@ -34,6 +40,18 @@ impl CommandApi {
             .borrow_mut()
             .push(Command { subject, payload });
         Ok(())
+    }
+
+    pub fn put(&mut self, key: &str, value: Dynamic) {
+        self.state.borrow_mut().insert(key.to_string(), value);
+    }
+
+    pub fn get(&mut self, key: &str) -> Dynamic {
+        self.state
+            .borrow()
+            .get(key)
+            .cloned()
+            .unwrap_or(Dynamic::UNIT)
     }
 
     pub fn take_commands(&self) -> Vec<Command> {
