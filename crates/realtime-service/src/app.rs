@@ -11,13 +11,22 @@ use axum::{
 };
 use futures_util::{SinkExt, StreamExt};
 use nexus_shared::nats::NatsAdapter;
+use serde::Serialize;
 use tokio::sync::{Mutex, mpsc};
 use tower_http::trace::TraceLayer;
 use uuid::Uuid;
 
-use crate::messaging::{DEFAULT_ROOM_ID, MessageRouter};
+use crate::messaging::{MessageRouter, RoomId};
 
 const REALTIME_MESSAGE_EVENT_SUBJECT: &str = "events.realtime.message";
+
+#[derive(Debug, Serialize)]
+struct RealtimeMessageEvent {
+    connection_id: Uuid,
+    rooms: Vec<RoomId>,
+    all_rooms: Vec<RoomId>,
+    payload: Vec<u8>,
+}
 
 pub struct AppState {
     message_router: Arc<Mutex<MessageRouter>>,
@@ -61,8 +70,8 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     {
         let mut message_router = state.message_router.lock().await;
         message_router
-            .add_connection(conn_id, tx, DEFAULT_ROOM_ID)
-            .expect("failed to add to default room");
+            .add_connection(conn_id, tx)
+            .expect("failed to add websocket connection to room");
     }
     tracing::debug!(%conn_id, "websocket connection registered");
 
@@ -103,9 +112,28 @@ async fn publish_client_message(conn_id: Uuid, state: &AppState, msg: &Message) 
         Message::Close(_) | Message::Ping(_) | Message::Pong(_) => return,
     };
 
+    let (rooms, all_rooms) = {
+        let message_router = state.message_router.lock().await;
+        let rooms = match message_router.rooms_for_connection(conn_id) {
+            Ok(rooms) => rooms,
+            Err(error) => {
+                tracing::error!(%error, %conn_id, "failed to resolve connection rooms");
+                return;
+            }
+        };
+        (rooms, message_router.all_rooms())
+    };
+
+    let event = RealtimeMessageEvent {
+        connection_id: conn_id,
+        rooms,
+        all_rooms,
+        payload,
+    };
+
     if let Err(error) = state
         .nats
-        .publish(REALTIME_MESSAGE_EVENT_SUBJECT.to_string(), payload.into())
+        .publish_json(REALTIME_MESSAGE_EVENT_SUBJECT, &event)
         .await
     {
         tracing::error!(%error, %conn_id, "failed to publish client message event");
