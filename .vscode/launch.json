@@ -92,7 +92,37 @@
             "sourceLanguages": [
                 "rust"
             ]
-        }
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Game Service",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--package",
+                    "game-service",
+                    "--bin",
+                    "game-service"
+                ],
+                "filter": {
+                    "name": "game-service",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}/crates/game-service",
+            "sourceLanguages": [
+                "rust"
+            ]
+        },
+        {
+            "type": "node-terminal",
+            "request": "launch",
+            "name": "Demo Frontend",
+            "command": "npm --prefix demo run dev",
+            "cwd": "${workspaceFolder}"
+        },
     ],
     "compounds": [
         {
@@ -102,6 +132,16 @@
                 "Users Service",
                 "Matchmaking Service",
                 "Realtime Service"
+            ],
+            "stopAll": true
+        },
+        {
+            "name": "Demo Flow",
+            "configurations": [
+                "Auth Service",
+                "Realtime Service",
+                "Game Service",
+                "Demo Frontend"
             ],
             "stopAll": true
         }

@@ -8,14 +8,14 @@ mod service;
 
 use std::net::SocketAddr;
 
-use axum::Router;
 use app_state::AppState;
+use axum::Router;
 use db::init_db;
 use messaging::ensure_registration_stream;
 
 #[tokio::main]
 async fn main() {
-    dotenvy::dotenv().ok();
+    load_env();
 
     let pool = init_db().await;
     let jwt_secret =
@@ -37,7 +37,10 @@ async fn main() {
 
     println!("auth-service listening on http://{}", addr);
 
-    axum::serve(listener, app)
-        .await
-        .expect("server failed");
+    axum::serve(listener, app).await.expect("server failed");
+}
+
+fn load_env() {
+    dotenvy::dotenv().ok();
+    dotenvy::from_path(concat!(env!("CARGO_MANIFEST_DIR"), "/.env")).ok();
 }

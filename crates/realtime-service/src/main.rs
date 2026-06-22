@@ -11,7 +11,7 @@ use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() {
-    dotenvy::from_path(concat!(env!("CARGO_MANIFEST_DIR"), "/.env")).ok();
+    load_env();
 
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -21,6 +21,8 @@ async fn main() {
 
     let nats_url =
         dotenvy::var("NATS_URL").expect("NATS_URL must be set before starting realtime-service");
+    let jwt_secret = dotenvy::var("JWT_SECRET")
+        .expect("JWT_SECRET must be set before starting realtime-service");
     tracing::info!(nats_url = %nats_url, "connecting to nats");
 
     let nats = NatsAdapter::new(&nats_url)
@@ -32,7 +34,7 @@ async fn main() {
         .expect("failed to initialize realtime command reader");
     tracing::info!("connected to nats");
 
-    let state = Arc::new(app::AppState::new(nats));
+    let state = Arc::new(app::AppState::new(nats, jwt_secret));
     let command_handler = RealtimeCommandHandler::new(state.message_router());
     tokio::spawn(commands::run_command_loop(command_reader, command_handler));
 
@@ -44,4 +46,9 @@ async fn main() {
     tracing::info!(address=%address, "realtime-service started");
 
     axum::serve(listener, app).await.unwrap();
+}
+
+fn load_env() {
+    dotenvy::dotenv().ok();
+    dotenvy::from_path(concat!(env!("CARGO_MANIFEST_DIR"), "/.env")).ok();
 }

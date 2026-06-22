@@ -6,7 +6,75 @@
     <title>Nexus Chess Demo</title>
   </head>
   <body>
-    <div class="shell">
+    <section id="login-page" class="auth-page">
+      <div class="auth-shell">
+        <div class="auth-brand">
+          <span class="swatch" aria-hidden="true"></span>
+          <div>
+            <h1>Nexus Chess</h1>
+            <p>Sign in</p>
+          </div>
+        </div>
+
+        <form id="login-form" class="auth-form">
+          <label>
+            Email
+            <input id="login-email" type="email" autocomplete="email" required />
+          </label>
+          <label>
+            Password
+            <input id="login-password" type="password" autocomplete="current-password" required />
+          </label>
+          <button type="submit">Login</button>
+        </form>
+        <p id="login-error" class="auth-error" aria-live="polite"></p>
+
+        <button id="show-register-button" class="link-button" type="button">Create account</button>
+      </div>
+    </section>
+
+    <section id="register-page" class="auth-page hidden">
+      <div class="auth-shell">
+        <div class="auth-brand">
+          <span class="swatch" aria-hidden="true"></span>
+          <div>
+            <h1>Nexus Chess</h1>
+            <p>Create account</p>
+          </div>
+        </div>
+
+        <form id="register-form" class="auth-form">
+          <label>
+            Email
+            <input id="register-email" type="email" autocomplete="email" required />
+          </label>
+          <label>
+            Username
+            <input id="register-username" type="text" autocomplete="username" required />
+          </label>
+          <div class="register-fields">
+            <label>
+              First
+              <input id="register-first-name" type="text" autocomplete="given-name" required />
+            </label>
+            <label>
+              Last
+              <input id="register-last-name" type="text" autocomplete="family-name" required />
+            </label>
+          </div>
+          <label>
+            Password
+            <input id="register-password" type="password" autocomplete="new-password" required />
+          </label>
+          <button type="submit">Register</button>
+        </form>
+        <p id="register-error" class="auth-error" aria-live="polite"></p>
+
+        <button id="show-login-button" class="link-button" type="button">Back to login</button>
+      </div>
+    </section>
+
+    <section id="game-page" class="shell hidden">
       <header class="toolbar">
         <div class="identity">
           <span id="client-color" class="swatch" aria-hidden="true"></span>
@@ -16,17 +84,10 @@
           </div>
         </div>
 
-        <form id="connect-form" class="connect-form">
-          <label>
-            WebSocket URL
-            <input id="ws-url" type="url" autocomplete="off" spellcheck="false" />
-          </label>
-          <button id="connect-button" type="submit">Connect</button>
-        </form>
-
         <div class="toolbar-actions">
           <button id="flip-button" type="button">Flip</button>
           <button id="reset-button" type="button">Reset</button>
+          <button id="logout-button" type="button">Logout</button>
           <div class="status" aria-live="polite">
             <span id="status-dot" class="status-dot"></span>
             <span id="status-text">Disconnected</span>
@@ -66,7 +127,7 @@
           </section>
         </aside>
       </main>
-    </div>
+    </section>
 
     <script type="module" src="./main.js"></script>
   </body>

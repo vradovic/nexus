@@ -3,15 +3,16 @@ use std::sync::Arc;
 use axum::{
     Router,
     extract::{
-        State, WebSocketUpgrade,
+        Query, State, WebSocketUpgrade,
         ws::{Message, WebSocket},
     },
-    response::Response,
+    http::StatusCode,
+    response::{IntoResponse, Response},
     routing::get,
 };
 use futures_util::{SinkExt, StreamExt};
-use nexus_shared::nats::NatsAdapter;
-use serde::Serialize;
+use nexus_shared::{authenticated_user_from_token, nats::NatsAdapter};
+use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, mpsc};
 use tower_http::trace::TraceLayer;
 use uuid::Uuid;
@@ -19,6 +20,11 @@ use uuid::Uuid;
 use crate::messaging::{MessageRouter, RoomId};
 
 const REALTIME_MESSAGE_EVENT_SUBJECT: &str = "events.realtime.message";
+
+#[derive(Debug, Default, Deserialize)]
+struct WsQuery {
+    token: Option<String>,
+}
 
 #[derive(Debug, Serialize)]
 struct RealtimeMessageEvent {
@@ -31,13 +37,15 @@ struct RealtimeMessageEvent {
 pub struct AppState {
     message_router: Arc<Mutex<MessageRouter>>,
     nats: NatsAdapter,
+    jwt_secret: String,
 }
 
 impl AppState {
-    pub fn new(nats: NatsAdapter) -> Self {
+    pub fn new(nats: NatsAdapter, jwt_secret: String) -> Self {
         Self {
             message_router: Arc::new(Mutex::new(MessageRouter::default())),
             nats,
+            jwt_secret,
         }
     }
 
@@ -58,12 +66,34 @@ async fn handle_health() -> &'static str {
     "ok"
 }
 
-async fn handle_ws(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
-    ws.on_upgrade(move |socket| handle_socket(socket, state))
+async fn handle_ws(
+    ws: WebSocketUpgrade,
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<WsQuery>,
+) -> Response {
+    let Some(token) = query.token.as_deref() else {
+        return (StatusCode::UNAUTHORIZED, "missing access token").into_response();
+    };
+
+    let user = match authenticated_user_from_token(token, &state.jwt_secret) {
+        Ok(user) => user,
+        Err(error) => {
+            tracing::warn!(?error, "websocket authentication failed");
+            return (StatusCode::UNAUTHORIZED, "invalid access token").into_response();
+        }
+    };
+
+    tracing::debug!(
+        user_id = %user.user_id,
+        email = %user.email,
+        role = %user.role,
+        "websocket authenticated"
+    );
+
+    ws.on_upgrade(move |socket| handle_socket(socket, state, user.user_id))
 }
 
-async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
-    let conn_id = Uuid::new_v4();
+async fn handle_socket(socket: WebSocket, state: Arc<AppState>, conn_id: Uuid) {
     let (mut socket_sender, mut socket_receiver) = socket.split();
     let (tx, mut rx) = mpsc::unbounded_channel::<Message>();
 

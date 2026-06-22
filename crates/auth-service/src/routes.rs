@@ -5,6 +5,7 @@ use axum::{
     routing::{get, post},
 };
 use nexus_shared::AppError;
+use tower_http::cors::CorsLayer;
 
 use crate::app_state::AppState;
 use crate::models::{LoginRequest, LoginResponse, RegisterRequest, RegisterResponse};
@@ -15,6 +16,7 @@ pub fn app_router(state: AppState) -> Router {
         .route("/health", get(health))
         .route("/register", post(register))
         .route("/login", post(login))
+        .layer(CorsLayer::permissive())
         .with_state(state)
 }
 
@@ -26,7 +28,8 @@ async fn register(
     State(state): State<AppState>,
     Json(payload): Json<RegisterRequest>,
 ) -> Result<(StatusCode, Json<RegisterResponse>), AppError> {
-    let response = service::register_user(&state.auth_repository, &state.nats_client, payload).await?;
+    let response =
+        service::register_user(&state.auth_repository, &state.nats_client, payload).await?;
 
     Ok((StatusCode::CREATED, Json(response)))
 }
