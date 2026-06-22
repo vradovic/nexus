@@ -13,13 +13,13 @@ use std::net::SocketAddr;
 use app_state::AppState;
 use axum::Router;
 use db::init_db;
-use messaging::ensure_matchmaking_stream;
+use messaging::ensure_events_stream;
 use redis::Client;
 use service::run_matchmaking_loop;
 
 #[tokio::main]
 async fn main() {
-    dotenvy::dotenv().ok();
+    load_env();
 
     let db = init_db().await;
     let redis_url = std::env::var("REDIS_URL")
@@ -32,7 +32,7 @@ async fn main() {
     let nats_client = async_nats::connect(nats_url)
         .await
         .expect("failed to connect to nats");
-    ensure_matchmaking_stream(&nats_client).await;
+    ensure_events_stream(&nats_client).await;
 
     let state = AppState::new(db, redis_client, jwt_secret, nats_client);
     tokio::spawn(run_matchmaking_loop(state.clone()));
@@ -46,4 +46,9 @@ async fn main() {
     println!("matchmaking-service listening on http://{}", addr);
 
     axum::serve(listener, app).await.expect("server failed");
+}
+
+fn load_env() {
+    dotenvy::dotenv().ok();
+    dotenvy::from_path(concat!(env!("CARGO_MANIFEST_DIR"), "/.env")).ok();
 }

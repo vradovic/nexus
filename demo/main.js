@@ -9,12 +9,21 @@ window.jQuery = $;
 const START_POSITION = "start";
 const AUTH_URL = "http://127.0.0.1:3001";
 const WS_URL = "ws://127.0.0.1:3000/ws";
+const MATCHMAKING_URL = "http://127.0.0.1:3003";
 const TOKEN_STORAGE_KEY = "nexus-demo-access-token";
 const PROFILE_STORAGE_KEY = "nexus-demo-profile";
 const PIECE_THEME_URL = "https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png";
+const MATCHMAKING_POLL_INTERVAL_MS = 1500;
+const MATCHMAKING_QUEUES = {
+  duel: {
+    label: "Duel",
+    requiredPlayers: 2,
+  },
+};
 
 const loginPage = document.querySelector("#login-page");
 const registerPage = document.querySelector("#register-page");
+const lobbyPage = document.querySelector("#lobby-page");
 const gamePage = document.querySelector("#game-page");
 
 const loginForm = document.querySelector("#login-form");
@@ -32,15 +41,25 @@ const registerPasswordInput = document.querySelector("#register-password");
 const registerError = document.querySelector("#register-error");
 const showLoginButton = document.querySelector("#show-login-button");
 
-const logoutButton = document.querySelector("#logout-button");
+const logoutButtons = document.querySelectorAll("[data-logout-button]");
+const clientLabels = document.querySelectorAll("[data-client-label]");
+const clientColors = document.querySelectorAll("[data-client-color]");
+const statusDots = document.querySelectorAll("[data-status-dot]");
+const statusTexts = document.querySelectorAll("[data-status-text]");
+
+const queueButtons = document.querySelectorAll("[data-ticket-key]");
+const queueStatus = document.querySelector("#queue-status");
+const queueLabel = document.querySelector("#queue-label");
+const ticketLabel = document.querySelector("#ticket-label");
+const matchLabel = document.querySelector("#match-label");
+const matchExpiresLabel = document.querySelector("#match-expires-label");
+const leaveQueueButton = document.querySelector("#leave-queue-button");
+
 const resetButton = document.querySelector("#reset-button");
 const flipButton = document.querySelector("#flip-button");
-const statusDot = document.querySelector("#status-dot");
-const statusText = document.querySelector("#status-text");
-const clientLabel = document.querySelector("#client-label");
-const clientColor = document.querySelector("#client-color");
 const logList = document.querySelector("#log");
 const positionLabel = document.querySelector("#position-label");
+const roomLabel = document.querySelector("#room-label");
 const lastEvent = document.querySelector("#last-event");
 const moveCount = document.querySelector("#move-count");
 
@@ -51,14 +70,26 @@ let authProfile = readStoredProfile();
 let clientId = "";
 let clientName = "";
 let color = "";
+let currentPage = "login";
 let currentPosition = START_POSITION;
 let moves = 0;
+let queueBusy = false;
+let queuedTicket = null;
+let pendingMatch = null;
+let awaitingRoomMatchId = "";
+let awaitingRoomTicketKey = "";
+let confirmingMatchId = "";
+let activeMatch = null;
+let matchmakingPollTimer = null;
+let statusRequestInFlight = false;
+const confirmedMatchIds = new Set();
 
 if (authProfile?.email) {
   loginEmailInput.value = authProfile.email;
 }
 
 syncIdentity();
+renderLobbyState();
 
 loginForm.addEventListener("submit", (event) => {
   event.preventDefault();
@@ -86,8 +117,26 @@ showLoginButton.addEventListener("click", () => {
   showPage("login");
 });
 
-logoutButton.addEventListener("click", () => {
-  logout();
+logoutButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    logout();
+  });
+});
+
+queueButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    joinQueue(button.dataset.ticketKey).catch((error) => {
+      renderLobbyState();
+      queueStatus.textContent = error.message || "Failed to join queue.";
+    });
+  });
+});
+
+leaveQueueButton.addEventListener("click", () => {
+  leaveQueue().catch((error) => {
+    renderLobbyState();
+    queueStatus.textContent = error.message || "Failed to leave queue.";
+  });
 });
 
 resetButton.addEventListener("click", () => {
@@ -109,7 +158,7 @@ window.addEventListener("resize", () => {
 });
 
 if (decodeJwtPayload(authToken)?.sub) {
-  startGameSession().catch((error) => {
+  startLobbySession().catch((error) => {
     logout();
     showAuthError(loginError, error);
   });
@@ -130,7 +179,7 @@ async function handleLoginSubmit() {
 
   const login = await authRequest("login", { email, password });
   saveAuth(login.access_token, { email });
-  await startGameSession();
+  await startLobbySession();
 }
 
 async function handleRegisterSubmit() {
@@ -158,14 +207,19 @@ async function handleRegisterSubmit() {
     email: registered.email,
     username: registered.username,
   });
-  await startGameSession();
+  await startLobbySession();
 }
 
-async function startGameSession() {
+async function startLobbySession() {
   syncIdentity();
-  showPage("game");
-  await initializeBoard();
-  connectWebSocket();
+  activeMatch = null;
+  roomLabel.textContent = "none";
+  showPage("lobby");
+  ensureWebSocketConnected();
+  await refreshMatchmakingStatus().catch((error) => {
+    queueStatus.textContent = error.message || "Failed to refresh matchmaking.";
+  });
+  startMatchmakingPolling();
 }
 
 async function authRequest(path, body) {
@@ -177,6 +231,38 @@ async function authRequest(path, body) {
 
   if (!response.ok) {
     throw new Error(await errorMessage(response));
+  }
+
+  return response.json();
+}
+
+async function matchmakingRequest(path, options = {}) {
+  const { body, method = "GET" } = options;
+  const headers = {
+    authorization: `Bearer ${authToken}`,
+  };
+
+  if (body !== undefined) {
+    headers["content-type"] = "application/json";
+  }
+
+  const response = await fetch(`${MATCHMAKING_URL}/${path}`, {
+    method,
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+
+  if (response.status === 401) {
+    logout();
+    throw new Error("Session expired. Sign in again.");
+  }
+
+  if (!response.ok) {
+    throw new Error(await errorMessage(response));
+  }
+
+  if (response.status === 204) {
+    return null;
   }
 
   return response.json();
@@ -212,6 +298,8 @@ function saveAuth(token, profile) {
 }
 
 function logout() {
+  stopMatchmakingPolling();
+
   if (socket) {
     socket.close();
     socket = null;
@@ -243,13 +331,19 @@ function syncIdentity() {
     color = colorFromId(clientId);
   }
 
-  clientLabel.textContent = clientName;
-  clientColor.style.background = color;
+  clientLabels.forEach((label) => {
+    label.textContent = clientName;
+  });
+  clientColors.forEach((swatch) => {
+    swatch.style.background = color;
+  });
 }
 
 function showPage(page) {
+  currentPage = page;
   loginPage.classList.toggle("hidden", page !== "login");
   registerPage.classList.toggle("hidden", page !== "register");
+  lobbyPage.classList.toggle("hidden", page !== "lobby");
   gamePage.classList.toggle("hidden", page !== "game");
 
   if (page === "game") {
@@ -259,6 +353,191 @@ function showPage(page) {
 
 function showAuthError(target, error) {
   target.textContent = error.message || "Something went wrong.";
+}
+
+async function joinQueue(ticketKey) {
+  if (!ticketKey || queueBusy || queuedTicket || pendingMatch || awaitingRoomMatchId) {
+    return;
+  }
+
+  queueBusy = true;
+  queueStatus.textContent = `Joining ${formatQueueName(ticketKey)}`;
+  renderLobbyState();
+  ensureWebSocketConnected();
+
+  try {
+    queuedTicket = await matchmakingRequest("join", {
+      method: "POST",
+      body: { ticket_key: ticketKey },
+    });
+    pendingMatch = null;
+    awaitingRoomMatchId = "";
+    awaitingRoomTicketKey = "";
+    startMatchmakingPolling();
+  } catch (error) {
+    if (error.message.includes("already in queue") || error.message.includes("pending match")) {
+      await refreshMatchmakingStatus();
+    }
+    throw error;
+  } finally {
+    queueBusy = false;
+    renderLobbyState();
+  }
+}
+
+async function leaveQueue() {
+  if (queueBusy || !queuedTicket || pendingMatch || awaitingRoomMatchId) {
+    return;
+  }
+
+  queueBusy = true;
+  queueStatus.textContent = "Leaving queue";
+  renderLobbyState();
+
+  try {
+    await matchmakingRequest("leave", { method: "POST" });
+    queuedTicket = null;
+    pendingMatch = null;
+    awaitingRoomMatchId = "";
+    awaitingRoomTicketKey = "";
+    confirmedMatchIds.clear();
+  } finally {
+    queueBusy = false;
+    renderLobbyState();
+  }
+}
+
+function startMatchmakingPolling() {
+  if (matchmakingPollTimer) {
+    return;
+  }
+
+  matchmakingPollTimer = window.setInterval(() => {
+    refreshMatchmakingStatus().catch((error) => {
+      queueStatus.textContent = error.message || "Failed to refresh matchmaking.";
+    });
+  }, MATCHMAKING_POLL_INTERVAL_MS);
+}
+
+function stopMatchmakingPolling() {
+  if (!matchmakingPollTimer) {
+    return;
+  }
+
+  window.clearInterval(matchmakingPollTimer);
+  matchmakingPollTimer = null;
+}
+
+async function refreshMatchmakingStatus() {
+  if (!decodeJwtPayload(authToken)?.sub || currentPage !== "lobby" || statusRequestInFlight) {
+    return;
+  }
+
+  statusRequestInFlight = true;
+
+  try {
+    const status = await matchmakingRequest("status");
+    queuedTicket = status.ticket || null;
+    pendingMatch = status.pending_match || null;
+    renderLobbyState();
+
+    if (pendingMatch) {
+      await confirmPendingMatch(pendingMatch);
+    }
+  } finally {
+    statusRequestInFlight = false;
+  }
+}
+
+async function confirmPendingMatch(match) {
+  if (
+    confirmingMatchId === match.id ||
+    confirmedMatchIds.has(match.id) ||
+    awaitingRoomMatchId === match.id
+  ) {
+    return;
+  }
+
+  if (!isSocketOpen()) {
+    ensureWebSocketConnected();
+    queueStatus.textContent = "Match found. Connecting";
+    return;
+  }
+
+  confirmingMatchId = match.id;
+  queueStatus.textContent = "Match found. Confirming";
+
+  try {
+    await matchmakingRequest(`matches/${match.id}/confirm`, { method: "POST" });
+    confirmedMatchIds.add(match.id);
+    awaitingRoomMatchId = match.id;
+    awaitingRoomTicketKey = match.ticket_key;
+    queueStatus.textContent = "Match confirmed. Opening room";
+  } catch (error) {
+    if (error.message.includes("timed out") || error.message.includes("not found")) {
+      pendingMatch = null;
+      awaitingRoomMatchId = "";
+      awaitingRoomTicketKey = "";
+      confirmedMatchIds.delete(match.id);
+    }
+    throw error;
+  } finally {
+    confirmingMatchId = "";
+    renderLobbyState();
+  }
+}
+
+function renderLobbyState() {
+  const activeQueueKey = pendingMatch?.ticket_key || queuedTicket?.ticket_key || awaitingRoomTicketKey;
+  const hasQueueState = Boolean(queuedTicket || pendingMatch || awaitingRoomMatchId);
+
+  queueLabel.textContent = activeQueueKey ? formatQueueName(activeQueueKey) : "none";
+  ticketLabel.textContent = queuedTicket ? shortId(queuedTicket.id) : "none";
+  matchLabel.textContent = pendingMatch
+    ? shortId(pendingMatch.id)
+    : awaitingRoomMatchId
+      ? shortId(awaitingRoomMatchId)
+      : "none";
+  matchExpiresLabel.textContent = pendingMatch?.expires_at_unix_seconds
+    ? secondsUntil(pendingMatch.expires_at_unix_seconds)
+    : "none";
+
+  if (queueBusy) {
+    queueStatus.textContent ||= "Working";
+  } else if (pendingMatch && awaitingRoomMatchId === pendingMatch.id) {
+    queueStatus.textContent = "Match confirmed. Opening room";
+  } else if (pendingMatch) {
+    queueStatus.textContent = isSocketOpen()
+      ? "Match found. Confirming"
+      : "Match found. Connecting";
+  } else if (awaitingRoomMatchId) {
+    queueStatus.textContent = "Match confirmed. Opening room";
+  } else if (queuedTicket) {
+    queueStatus.textContent = `Searching ${formatQueueName(queuedTicket.ticket_key)}`;
+  } else {
+    queueStatus.textContent = "Select a queue";
+  }
+
+  queueButtons.forEach((button) => {
+    const isActive = button.dataset.ticketKey === activeQueueKey;
+    button.classList.toggle("active", isActive);
+    button.disabled = queueBusy || hasQueueState;
+  });
+
+  leaveQueueButton.disabled = queueBusy || !queuedTicket || Boolean(pendingMatch || awaitingRoomMatchId);
+}
+
+function formatQueueName(ticketKey) {
+  return MATCHMAKING_QUEUES[ticketKey]?.label || ticketKey;
+}
+
+function shortId(id) {
+  return id ? id.slice(0, 8) : "none";
+}
+
+function secondsUntil(unixSeconds) {
+  const seconds = Math.max(0, unixSeconds - Math.floor(Date.now() / 1000));
+  return `${seconds}s`;
 }
 
 async function initializeBoard() {
@@ -286,6 +565,11 @@ function handleDrop(source, target, piece, newPosition) {
     return "snapback";
   }
 
+  if (!activeMatch) {
+    writeLog("join a match before moving pieces");
+    return "snapback";
+  }
+
   if (!isSocketOpen()) {
     writeLog("connect before moving pieces");
     return "snapback";
@@ -304,6 +588,14 @@ function handleDrop(source, target, piece, newPosition) {
   });
 
   return undefined;
+}
+
+function ensureWebSocketConnected() {
+  if (socket?.readyState === WebSocket.OPEN || socket?.readyState === WebSocket.CONNECTING) {
+    return;
+  }
+
+  connectWebSocket();
 }
 
 function connectWebSocket() {
@@ -336,15 +628,9 @@ function connectWebSocket() {
     if (socket !== nextSocket) return;
 
     setStatus("connected", "Connected");
-    writeLog(`connected as ${clientName}`);
-
-    sendPayload({
-      type: "chess.sync_request",
-      clientId,
-      clientName,
-      color,
-      createdAt: Date.now(),
-    });
+    if (currentPage === "game") {
+      writeLog(`connected as ${clientName}`);
+    }
   });
 
   nextSocket.addEventListener("message", async (event) => {
@@ -359,14 +645,18 @@ function connectWebSocket() {
     if (socket !== nextSocket) return;
 
     setStatus("disconnected", "Disconnected");
-    writeLog("socket closed");
+    if (currentPage === "game") {
+      writeLog("socket closed");
+    }
   });
 
   nextSocket.addEventListener("error", () => {
     if (socket !== nextSocket) return;
 
     setStatus("disconnected", "Connection error");
-    writeLog("socket error");
+    if (currentPage === "game") {
+      writeLog("socket error");
+    }
   });
 }
 
@@ -377,6 +667,8 @@ function sendBoardPosition({ action, move, position = currentPosition }) {
     clientId,
     clientName,
     color,
+    matchId: activeMatch?.matchId || null,
+    room: activeMatch?.room || null,
     move,
     moves,
     position: clonePosition(position),
@@ -421,6 +713,17 @@ function applyPayload(payload) {
 
   lastEvent.textContent = payload.type || "unknown";
 
+  if (payload.type === "match.found") {
+    enterGameRoom(payload).catch((error) => {
+      writeLog(error.message || "failed to enter match room");
+    });
+    return;
+  }
+
+  if (!activeMatch) {
+    return;
+  }
+
   if (payload.type === "chess.sync_request") {
     if (payload.clientId !== clientId) {
       sendBoardPosition({
@@ -448,14 +751,77 @@ function applyPayload(payload) {
   writeLog(`received ${payload.type || "unknown"} payload`);
 }
 
+async function enterGameRoom(payload) {
+  const nextMatch = normalizeMatchPayload(payload);
+
+  if (!nextMatch.room || !nextMatch.matchId) {
+    throw new Error("match notification was missing room details");
+  }
+
+  if (activeMatch?.matchId === nextMatch.matchId && currentPage === "game") {
+    return;
+  }
+
+  activeMatch = nextMatch;
+  queuedTicket = null;
+  pendingMatch = null;
+  awaitingRoomMatchId = "";
+  awaitingRoomTicketKey = "";
+  confirmedMatchIds.delete(nextMatch.matchId);
+  stopMatchmakingPolling();
+  renderLobbyState();
+
+  resetBoardState();
+  roomLabel.textContent = nextMatch.room;
+  showPage("game");
+  await initializeBoard();
+  board?.resize();
+  writeLog(`match found: ${formatQueueName(nextMatch.ticketKey)}`);
+
+  sendPayload({
+    type: "chess.sync_request",
+    clientId,
+    clientName,
+    color,
+    matchId: nextMatch.matchId,
+    room: nextMatch.room,
+    createdAt: Date.now(),
+  });
+}
+
+function normalizeMatchPayload(payload) {
+  return {
+    type: payload.type,
+    matchId: payload.matchId || payload.match_id || "",
+    room: payload.room || "",
+    ticketKey: payload.ticketKey || payload.ticket_key || "",
+    playerIds: payload.playerIds || payload.player_ids || [],
+  };
+}
+
 function resetSessionState() {
+  queuedTicket = null;
+  pendingMatch = null;
+  awaitingRoomMatchId = "";
+  awaitingRoomTicketKey = "";
+  confirmingMatchId = "";
+  activeMatch = null;
+  queueBusy = false;
+  statusRequestInFlight = false;
+  confirmedMatchIds.clear();
+  renderLobbyState();
+  resetBoardState();
+  setStatus("disconnected", "Disconnected");
+}
+
+function resetBoardState() {
   currentPosition = START_POSITION;
   moves = 0;
+  roomLabel.textContent = "none";
   lastEvent.textContent = "none";
   moveCount.textContent = "0";
   logList.replaceChildren();
   setBoardPosition(START_POSITION, false);
-  setStatus("disconnected", "Disconnected");
 }
 
 function setBoardPosition(position, animate) {
@@ -575,8 +941,12 @@ function loadScript(src) {
 }
 
 function setStatus(kind, text) {
-  statusDot.className = `status-dot ${kind}`;
-  statusText.textContent = text;
+  statusDots.forEach((dot) => {
+    dot.className = `status-dot ${kind}`;
+  });
+  statusTexts.forEach((label) => {
+    label.textContent = text;
+  });
 }
 
 function writeLog(message) {

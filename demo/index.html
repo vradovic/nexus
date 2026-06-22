@@ -74,23 +74,84 @@
       </div>
     </section>
 
+    <section id="lobby-page" class="shell hidden">
+      <header class="toolbar">
+        <div class="identity">
+          <span class="swatch" data-client-color aria-hidden="true"></span>
+          <div>
+            <h1>Nexus Chess</h1>
+            <p data-client-label></p>
+          </div>
+        </div>
+
+        <div class="toolbar-actions">
+          <button data-logout-button type="button">Logout</button>
+          <div class="status" aria-live="polite">
+            <span class="status-dot" data-status-dot></span>
+            <span data-status-text>Disconnected</span>
+          </div>
+        </div>
+      </header>
+
+      <main class="lobby-stage">
+        <section class="lobby-panel" aria-label="Matchmaking lobby">
+          <div class="lobby-header">
+            <div>
+              <h2>Lobby</h2>
+              <p id="queue-status" aria-live="polite">Select a queue</p>
+            </div>
+          </div>
+
+          <div class="queue-list">
+            <button class="queue-card" data-ticket-key="duel" type="button">
+              <span>Duel</span>
+              <small>2 players</small>
+            </button>
+          </div>
+
+          <dl class="lobby-state">
+            <div>
+              <dt>Queue</dt>
+              <dd id="queue-label">none</dd>
+            </div>
+            <div>
+              <dt>Ticket</dt>
+              <dd id="ticket-label">none</dd>
+            </div>
+            <div>
+              <dt>Match</dt>
+              <dd id="match-label">none</dd>
+            </div>
+            <div>
+              <dt>Expires</dt>
+              <dd id="match-expires-label">none</dd>
+            </div>
+          </dl>
+
+          <div class="lobby-actions">
+            <button id="leave-queue-button" type="button" disabled>Leave queue</button>
+          </div>
+        </section>
+      </main>
+    </section>
+
     <section id="game-page" class="shell hidden">
       <header class="toolbar">
         <div class="identity">
-          <span id="client-color" class="swatch" aria-hidden="true"></span>
+          <span class="swatch" data-client-color aria-hidden="true"></span>
           <div>
             <h1>Nexus Chess</h1>
-            <p id="client-label"></p>
+            <p data-client-label></p>
           </div>
         </div>
 
         <div class="toolbar-actions">
           <button id="flip-button" type="button">Flip</button>
           <button id="reset-button" type="button">Reset</button>
-          <button id="logout-button" type="button">Logout</button>
+          <button data-logout-button type="button">Logout</button>
           <div class="status" aria-live="polite">
-            <span id="status-dot" class="status-dot"></span>
-            <span id="status-text">Disconnected</span>
+            <span class="status-dot" data-status-dot></span>
+            <span data-status-text>Disconnected</span>
           </div>
         </div>
       </header>
@@ -109,6 +170,10 @@
               <div>
                 <dt>Board</dt>
                 <dd id="position-label">start</dd>
+              </div>
+              <div>
+                <dt>Room</dt>
+                <dd id="room-label">none</dd>
               </div>
               <div>
                 <dt>Last event</dt>

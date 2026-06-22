@@ -1,11 +1,10 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-pub const MATCHMAKING_EVENTS_STREAM: &str = "MATCHMAKING_EVENTS";
-pub const MATCH_FOUND_SUBJECT: &str = "matchmaking.match_found";
-pub const MATCH_CONFIRMED_SUBJECT: &str = "matchmaking.match_confirmed";
-pub const MATCH_DECLINED_SUBJECT: &str = "matchmaking.match_declined";
-pub const MATCH_TIMED_OUT_SUBJECT: &str = "matchmaking.match_timed_out";
+pub const MATCH_FOUND_SUBJECT: &str = "events.matchmaking.match_found";
+pub const MATCH_CONFIRMED_SUBJECT: &str = "events.matchmaking.match_confirmed";
+pub const MATCH_DECLINED_SUBJECT: &str = "events.matchmaking.match_declined";
+pub const MATCH_TIMED_OUT_SUBJECT: &str = "events.matchmaking.match_timed_out";
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MatchFoundEvent {

@@ -101,6 +101,12 @@ fn payload_to_dynamic(subject: &str, payload: &[u8]) -> Dynamic {
         }
     }
 
+    if let Ok(value) = serde_json::from_slice::<serde_json::Value>(payload) {
+        if let Ok(dynamic) = rhai::serde::to_dynamic(value) {
+            return dynamic;
+        }
+    }
+
     Dynamic::from_blob(payload.to_vec())
 }
 
@@ -262,6 +268,125 @@ mod tests {
                 .expect("remove room command is valid"),
             serde_json::json!({ "room": "match-1" })
         );
+    }
+
+    #[test]
+    fn match_confirmed_event_can_create_room_and_add_players() {
+        let script_path = write_script(
+            r#"
+                fn on_match_confirmed(event, api) {
+                    let room = "match:" + event.match_id;
+
+                    api.create_room(room);
+
+                    for player_id in event.player_ids {
+                        api.add_to_room(player_id, room);
+                    }
+                }
+            "#,
+        );
+        let mut engine =
+            ScriptEngine::new(script_path.to_str().expect("script path is valid UTF-8"));
+        let event = serde_json::json!({
+            "match_id": "11111111-1111-1111-1111-111111111111",
+            "rule_id": "22222222-2222-2222-2222-222222222222",
+            "ticket_key": "duel",
+            "player_ids": [
+                "33333333-3333-3333-3333-333333333333",
+                "44444444-4444-4444-4444-444444444444"
+            ],
+        });
+
+        let commands = engine
+            .handle_event(
+                nexus_shared::MATCH_CONFIRMED_SUBJECT,
+                &serde_json::to_vec(&event).expect("event is serialized"),
+            )
+            .expect("event is handled");
+
+        fs::remove_file(script_path).ok();
+
+        assert_eq!(commands.len(), 3);
+        assert_eq!(commands[0].subject, "commands.rooms.create");
+        assert_eq!(commands[1].subject, "commands.rooms.join");
+        assert_eq!(commands[2].subject, "commands.rooms.join");
+
+        let room = "match:11111111-1111-1111-1111-111111111111";
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&commands[0].payload)
+                .expect("create room command is valid"),
+            serde_json::json!({ "room": room })
+        );
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&commands[1].payload)
+                .expect("join room command is valid"),
+            serde_json::json!({
+                "connection_id": "33333333-3333-3333-3333-333333333333",
+                "room": room,
+            })
+        );
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&commands[2].payload)
+                .expect("join room command is valid"),
+            serde_json::json!({
+                "connection_id": "44444444-4444-4444-4444-444444444444",
+                "room": room,
+            })
+        );
+    }
+
+    #[test]
+    fn default_match_confirmed_script_notifies_match_room() {
+        let mut engine = ScriptEngine::new(DEFAULT_SCRIPT_PATH);
+        let event = serde_json::json!({
+            "match_id": "11111111-1111-1111-1111-111111111111",
+            "rule_id": "22222222-2222-2222-2222-222222222222",
+            "ticket_key": "duel",
+            "player_ids": [
+                "33333333-3333-3333-3333-333333333333",
+                "44444444-4444-4444-4444-444444444444"
+            ],
+        });
+
+        let commands = engine
+            .handle_event(
+                nexus_shared::MATCH_CONFIRMED_SUBJECT,
+                &serde_json::to_vec(&event).expect("event is serialized"),
+            )
+            .expect("event is handled");
+
+        assert_eq!(commands.len(), 6);
+        assert_eq!(commands[0].subject, "commands.rooms.create");
+        assert_eq!(commands[1].subject, "commands.rooms.join");
+        assert_eq!(commands[2].subject, "commands.rooms.leave");
+        assert_eq!(commands[3].subject, "commands.rooms.join");
+        assert_eq!(commands[4].subject, "commands.rooms.leave");
+        assert_eq!(commands[5].subject, "commands.broadcast.rooms");
+
+        let room = "match:11111111-1111-1111-1111-111111111111";
+        let broadcast =
+            serde_json::from_slice::<serde_json::Value>(&commands[5].payload)
+                .expect("broadcast command is valid json");
+        assert_eq!(broadcast["rooms"], serde_json::json!([room]));
+
+        let payload = broadcast["payload"]
+            .as_array()
+            .expect("broadcast payload is a byte array")
+            .iter()
+            .map(|value| {
+                value
+                    .as_u64()
+                    .and_then(|byte| u8::try_from(byte).ok())
+                    .expect("payload byte is valid")
+            })
+            .collect::<Vec<_>>();
+        let message =
+            serde_json::from_slice::<serde_json::Value>(&payload).expect("message is valid json");
+
+        assert_eq!(message["type"], "match.found");
+        assert_eq!(message["match_id"], "11111111-1111-1111-1111-111111111111");
+        assert_eq!(message["room"], room);
+        assert_eq!(message["ticket_key"], "duel");
     }
 
     fn write_script(contents: &str) -> PathBuf {

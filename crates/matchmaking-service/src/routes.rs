@@ -6,6 +6,7 @@ use axum::{
     routing::{get, post},
 };
 use nexus_shared::{AppError, AuthenticatedUser};
+use tower_http::cors::CorsLayer;
 
 use crate::{
     app_state::AppState,
@@ -40,6 +41,7 @@ pub fn app_router(state: AppState) -> Router {
         .route("/health", get(health))
         .merge(player_routes)
         .merge(admin_routes)
+        .layer(CorsLayer::permissive())
         .with_state(state)
 }
 
