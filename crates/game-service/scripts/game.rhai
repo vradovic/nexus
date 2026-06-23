@@ -1,33 +1,33 @@
 fn on_message(event, api) {
-    let match_rooms = [];
+    let match_channels = [];
 
-    for room in event.rooms {
-        if room != "default" {
-            match_rooms.push(room);
+    for channel in event.channels {
+        if channel != "default" {
+            match_channels.push(channel);
         }
     }
 
-    if match_rooms.len() > 0 {
-        api.broadcast_to_rooms(event.payload, match_rooms);
+    if match_channels.len() > 0 {
+        api.broadcast_to_channels(event.payload, match_channels);
     }
 }
 
 fn on_match_confirmed(event, api) {
-    let room = "match:" + event.match_id;
+    let channel = "match:" + event.match_id;
 
-    api.create_room(room);
+    api.create_channel(channel);
 
     for player_id in event.player_ids {
-        api.add_to_room(player_id, room);
-        api.remove_from_room(player_id, "default");
+        api.add_to_channel(player_id, channel);
+        api.remove_from_channel(player_id, "default");
     }
 
     let message = #{};
     message["type"] = "match.found";
     message["match_id"] = event.match_id;
-    message["room"] = room;
+    message["channel"] = channel;
     message["ticket_key"] = event.ticket_key;
     message["player_ids"] = event.player_ids;
 
-    api.broadcast_to_rooms(message, [room]);
+    api.broadcast_to_channels(message, [channel]);
 }

@@ -5,11 +5,11 @@ use rhai::{Array, Blob, Dynamic, EvalAltResult};
 pub type StateStore = Rc<RefCell<HashMap<String, Dynamic>>>;
 
 const BROADCAST_SUBJECT: &str = "commands.broadcast";
-const ROOM_BROADCAST_SUBJECT: &str = "commands.broadcast.rooms";
-const ROOM_CREATE_SUBJECT: &str = "commands.rooms.create";
-const ROOM_REMOVE_SUBJECT: &str = "commands.rooms.remove";
-const ROOM_JOIN_SUBJECT: &str = "commands.rooms.join";
-const ROOM_LEAVE_SUBJECT: &str = "commands.rooms.leave";
+const CHANNEL_BROADCAST_SUBJECT: &str = "commands.broadcast.channels";
+const CHANNEL_CREATE_SUBJECT: &str = "commands.channels.create";
+const CHANNEL_REMOVE_SUBJECT: &str = "commands.channels.remove";
+const CHANNEL_JOIN_SUBJECT: &str = "commands.channels.join";
+const CHANNEL_LEAVE_SUBJECT: &str = "commands.channels.leave";
 
 #[derive(Clone)]
 pub struct Command {
@@ -41,75 +41,75 @@ impl CommandApi {
         Ok(())
     }
 
-    pub fn broadcast_to_rooms(
+    pub fn broadcast_to_channels(
         &mut self,
         message: Dynamic,
-        rooms: Array,
+        channels: Array,
     ) -> Result<(), Box<EvalAltResult>> {
-        let rooms = room_ids_from_array(rooms)?;
+        let channels = channel_ids_from_array(channels)?;
         let payload = payload_from_dynamic(message)?;
         let command = serde_json::json!({
-            "rooms": rooms,
+            "channels": channels,
             "payload": payload,
         });
         let payload = serde_json::to_vec(&command)
-            .map_err(|error| format!("failed to serialize room broadcast: {error}"))?;
+            .map_err(|error| format!("failed to serialize channel broadcast: {error}"))?;
 
         self.commands.borrow_mut().push(Command {
-            subject: ROOM_BROADCAST_SUBJECT.to_string(),
+            subject: CHANNEL_BROADCAST_SUBJECT.to_string(),
             payload,
         });
         Ok(())
     }
 
-    pub fn create_room(&mut self, room: &str) -> Result<(), Box<EvalAltResult>> {
-        let room = validate_id(room, "room id")?;
+    pub fn create_channel(&mut self, channel: &str) -> Result<(), Box<EvalAltResult>> {
+        let channel = validate_id(channel, "channel id")?;
         self.push_json_command(
-            ROOM_CREATE_SUBJECT,
+            CHANNEL_CREATE_SUBJECT,
             serde_json::json!({
-                "room": room,
+                "channel": channel,
             }),
         )
     }
 
-    pub fn remove_room(&mut self, room: &str) -> Result<(), Box<EvalAltResult>> {
-        let room = validate_id(room, "room id")?;
+    pub fn remove_channel(&mut self, channel: &str) -> Result<(), Box<EvalAltResult>> {
+        let channel = validate_id(channel, "channel id")?;
         self.push_json_command(
-            ROOM_REMOVE_SUBJECT,
+            CHANNEL_REMOVE_SUBJECT,
             serde_json::json!({
-                "room": room,
+                "channel": channel,
             }),
         )
     }
 
-    pub fn add_to_room(
+    pub fn add_to_channel(
         &mut self,
         connection_id: &str,
-        room: &str,
+        channel: &str,
     ) -> Result<(), Box<EvalAltResult>> {
         let connection_id = validate_id(connection_id, "connection id")?;
-        let room = validate_id(room, "room id")?;
+        let channel = validate_id(channel, "channel id")?;
         self.push_json_command(
-            ROOM_JOIN_SUBJECT,
+            CHANNEL_JOIN_SUBJECT,
             serde_json::json!({
                 "connection_id": connection_id,
-                "room": room,
+                "channel": channel,
             }),
         )
     }
 
-    pub fn remove_from_room(
+    pub fn remove_from_channel(
         &mut self,
         connection_id: &str,
-        room: &str,
+        channel: &str,
     ) -> Result<(), Box<EvalAltResult>> {
         let connection_id = validate_id(connection_id, "connection id")?;
-        let room = validate_id(room, "room id")?;
+        let channel = validate_id(channel, "channel id")?;
         self.push_json_command(
-            ROOM_LEAVE_SUBJECT,
+            CHANNEL_LEAVE_SUBJECT,
             serde_json::json!({
                 "connection_id": connection_id,
-                "room": room,
+                "channel": channel,
             }),
         )
     }
@@ -157,13 +157,14 @@ fn payload_from_dynamic(message: Dynamic) -> Result<Vec<u8>, Box<EvalAltResult>>
     serde_json::to_vec(&val).map_err(|error| format!("failed to serialize payload: {error}").into())
 }
 
-fn room_ids_from_array(rooms: Array) -> Result<Vec<String>, Box<EvalAltResult>> {
-    rooms
+fn channel_ids_from_array(channels: Array) -> Result<Vec<String>, Box<EvalAltResult>> {
+    channels
         .into_iter()
-        .map(|room| {
-            room.try_cast::<String>()
-                .filter(|room| !room.is_empty())
-                .ok_or_else(|| "room id must be a non-empty string".into())
+        .map(|channel| {
+            channel
+                .try_cast::<String>()
+                .filter(|channel| !channel.is_empty())
+                .ok_or_else(|| "channel id must be a non-empty string".into())
         })
         .collect()
 }

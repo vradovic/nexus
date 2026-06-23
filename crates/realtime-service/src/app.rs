@@ -17,7 +17,7 @@ use tokio::sync::{Mutex, mpsc};
 use tower_http::trace::TraceLayer;
 use uuid::Uuid;
 
-use crate::messaging::{MessageRouter, RoomId};
+use crate::messaging::{ChannelId, MessageRouter};
 
 const REALTIME_MESSAGE_EVENT_SUBJECT: &str = "events.realtime.message";
 
@@ -29,8 +29,8 @@ struct WsQuery {
 #[derive(Debug, Serialize)]
 struct RealtimeMessageEvent {
     connection_id: Uuid,
-    rooms: Vec<RoomId>,
-    all_rooms: Vec<RoomId>,
+    channels: Vec<ChannelId>,
+    all_channels: Vec<ChannelId>,
     payload: Vec<u8>,
 }
 
@@ -101,7 +101,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>, conn_id: Uuid) {
         let mut message_router = state.message_router.lock().await;
         message_router
             .add_connection(conn_id, tx)
-            .expect("failed to add websocket connection to room");
+            .expect("failed to add websocket connection to channel");
     }
     tracing::debug!(%conn_id, "websocket connection registered");
 
@@ -142,22 +142,22 @@ async fn publish_client_message(conn_id: Uuid, state: &AppState, msg: &Message) 
         Message::Close(_) | Message::Ping(_) | Message::Pong(_) => return,
     };
 
-    let (rooms, all_rooms) = {
+    let (channels, all_channels) = {
         let message_router = state.message_router.lock().await;
-        let rooms = match message_router.rooms_for_connection(conn_id) {
-            Ok(rooms) => rooms,
+        let channels = match message_router.channels_for_connection(conn_id) {
+            Ok(channels) => channels,
             Err(error) => {
-                tracing::error!(%error, %conn_id, "failed to resolve connection rooms");
+                tracing::error!(%error, %conn_id, "failed to resolve connection channels");
                 return;
             }
         };
-        (rooms, message_router.all_rooms())
+        (channels, message_router.all_channels())
     };
 
     let event = RealtimeMessageEvent {
         connection_id: conn_id,
-        rooms,
-        all_rooms,
+        channels,
+        all_channels,
         payload,
     };
 

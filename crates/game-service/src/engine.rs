@@ -12,9 +12,9 @@ const REALTIME_MESSAGE_EVENT_SUBJECT: &str = "events.realtime.message";
 #[derive(Debug, Deserialize)]
 struct RealtimeMessageEvent {
     connection_id: String,
-    rooms: Vec<String>,
+    channels: Vec<String>,
     #[serde(default)]
-    all_rooms: Vec<String>,
+    all_channels: Vec<String>,
     payload: Vec<u8>,
 }
 
@@ -38,11 +38,11 @@ impl ScriptEngine {
         engine
             .register_type::<CommandApi>()
             .register_fn("broadcast", CommandApi::broadcast)
-            .register_fn("broadcast_to_rooms", CommandApi::broadcast_to_rooms)
-            .register_fn("create_room", CommandApi::create_room)
-            .register_fn("remove_room", CommandApi::remove_room)
-            .register_fn("add_to_room", CommandApi::add_to_room)
-            .register_fn("remove_from_room", CommandApi::remove_from_room)
+            .register_fn("broadcast_to_channels", CommandApi::broadcast_to_channels)
+            .register_fn("create_channel", CommandApi::create_channel)
+            .register_fn("remove_channel", CommandApi::remove_channel)
+            .register_fn("add_to_channel", CommandApi::add_to_channel)
+            .register_fn("remove_from_channel", CommandApi::remove_from_channel)
             .register_fn("put", CommandApi::put)
             .register_fn("get", CommandApi::get);
 
@@ -112,20 +112,20 @@ fn payload_to_dynamic(subject: &str, payload: &[u8]) -> Dynamic {
 
 fn realtime_message_to_dynamic(event: RealtimeMessageEvent) -> Dynamic {
     let mut map = Map::new();
-    let rooms = event
-        .rooms
+    let channels = event
+        .channels
         .into_iter()
         .map(Dynamic::from)
         .collect::<Array>();
-    let all_rooms = event
-        .all_rooms
+    let all_channels = event
+        .all_channels
         .into_iter()
         .map(Dynamic::from)
         .collect::<Array>();
 
     map.insert("connection_id".into(), Dynamic::from(event.connection_id));
-    map.insert("rooms".into(), Dynamic::from_array(rooms));
-    map.insert("all_rooms".into(), Dynamic::from_array(all_rooms));
+    map.insert("channels".into(), Dynamic::from_array(channels));
+    map.insert("all_channels".into(), Dynamic::from_array(all_channels));
     map.insert("payload".into(), Dynamic::from_blob(event.payload));
 
     Dynamic::from_map(map)
@@ -176,11 +176,11 @@ mod tests {
     }
 
     #[test]
-    fn realtime_event_exposes_all_rooms_to_scripts() {
+    fn realtime_event_exposes_all_channels_to_scripts() {
         let script_path = write_script(
             r#"
                 fn on_message(event, api) {
-                    api.broadcast_to_rooms(event.payload, event.all_rooms);
+                    api.broadcast_to_channels(event.payload, event.all_channels);
                 }
             "#,
         );
@@ -188,8 +188,8 @@ mod tests {
             ScriptEngine::new(script_path.to_str().expect("script path is valid UTF-8"));
         let event = serde_json::json!({
             "connection_id": "connection-1",
-            "rooms": ["match-1"],
-            "all_rooms": ["default", "match-1"],
+            "channels": ["match-1"],
+            "all_channels": ["default", "match-1"],
             "payload": [104, 105],
         });
 
@@ -203,23 +203,26 @@ mod tests {
         fs::remove_file(script_path).ok();
 
         assert_eq!(commands.len(), 1);
-        assert_eq!(commands[0].subject, "commands.broadcast.rooms");
+        assert_eq!(commands[0].subject, "commands.broadcast.channels");
 
         let command =
             serde_json::from_slice::<serde_json::Value>(&commands[0].payload).expect("valid json");
-        assert_eq!(command["rooms"], serde_json::json!(["default", "match-1"]));
+        assert_eq!(
+            command["channels"],
+            serde_json::json!(["default", "match-1"])
+        );
         assert_eq!(command["payload"], serde_json::json!([104, 105]));
     }
 
     #[test]
-    fn room_management_api_queues_room_commands() {
+    fn channel_management_api_queues_channel_commands() {
         let script_path = write_script(
             r#"
                 fn on_message(event, api) {
-                    api.create_room("match-2");
-                    api.add_to_room(event.connection_id, "match-2");
-                    api.remove_from_room(event.connection_id, "default");
-                    api.remove_room("match-1");
+                    api.create_channel("match-2");
+                    api.add_to_channel(event.connection_id, "match-2");
+                    api.remove_from_channel(event.connection_id, "default");
+                    api.remove_channel("match-1");
                 }
             "#,
         );
@@ -228,8 +231,8 @@ mod tests {
         let connection_id = "550e8400-e29b-41d4-a716-446655440000";
         let event = serde_json::json!({
             "connection_id": connection_id,
-            "rooms": ["default"],
-            "all_rooms": ["default", "match-1"],
+            "channels": ["default"],
+            "all_channels": ["default", "match-1"],
             "payload": [],
         });
 
@@ -243,44 +246,44 @@ mod tests {
         fs::remove_file(script_path).ok();
 
         assert_eq!(commands.len(), 4);
-        assert_eq!(commands[0].subject, "commands.rooms.create");
-        assert_eq!(commands[1].subject, "commands.rooms.join");
-        assert_eq!(commands[2].subject, "commands.rooms.leave");
-        assert_eq!(commands[3].subject, "commands.rooms.remove");
+        assert_eq!(commands[0].subject, "commands.channels.create");
+        assert_eq!(commands[1].subject, "commands.channels.join");
+        assert_eq!(commands[2].subject, "commands.channels.leave");
+        assert_eq!(commands[3].subject, "commands.channels.remove");
 
         assert_eq!(
             serde_json::from_slice::<serde_json::Value>(&commands[0].payload)
-                .expect("create room command is valid"),
-            serde_json::json!({ "room": "match-2" })
+                .expect("create channel command is valid"),
+            serde_json::json!({ "channel": "match-2" })
         );
         assert_eq!(
             serde_json::from_slice::<serde_json::Value>(&commands[1].payload)
-                .expect("join room command is valid"),
-            serde_json::json!({ "connection_id": connection_id, "room": "match-2" })
+                .expect("join channel command is valid"),
+            serde_json::json!({ "connection_id": connection_id, "channel": "match-2" })
         );
         assert_eq!(
             serde_json::from_slice::<serde_json::Value>(&commands[2].payload)
-                .expect("leave room command is valid"),
-            serde_json::json!({ "connection_id": connection_id, "room": "default" })
+                .expect("leave channel command is valid"),
+            serde_json::json!({ "connection_id": connection_id, "channel": "default" })
         );
         assert_eq!(
             serde_json::from_slice::<serde_json::Value>(&commands[3].payload)
-                .expect("remove room command is valid"),
-            serde_json::json!({ "room": "match-1" })
+                .expect("remove channel command is valid"),
+            serde_json::json!({ "channel": "match-1" })
         );
     }
 
     #[test]
-    fn match_confirmed_event_can_create_room_and_add_players() {
+    fn match_confirmed_event_can_create_channel_and_add_players() {
         let script_path = write_script(
             r#"
                 fn on_match_confirmed(event, api) {
-                    let room = "match:" + event.match_id;
+                    let channel = "match:" + event.match_id;
 
-                    api.create_room(room);
+                    api.create_channel(channel);
 
                     for player_id in event.player_ids {
-                        api.add_to_room(player_id, room);
+                        api.add_to_channel(player_id, channel);
                     }
                 }
             "#,
@@ -307,36 +310,36 @@ mod tests {
         fs::remove_file(script_path).ok();
 
         assert_eq!(commands.len(), 3);
-        assert_eq!(commands[0].subject, "commands.rooms.create");
-        assert_eq!(commands[1].subject, "commands.rooms.join");
-        assert_eq!(commands[2].subject, "commands.rooms.join");
+        assert_eq!(commands[0].subject, "commands.channels.create");
+        assert_eq!(commands[1].subject, "commands.channels.join");
+        assert_eq!(commands[2].subject, "commands.channels.join");
 
-        let room = "match:11111111-1111-1111-1111-111111111111";
+        let channel = "match:11111111-1111-1111-1111-111111111111";
         assert_eq!(
             serde_json::from_slice::<serde_json::Value>(&commands[0].payload)
-                .expect("create room command is valid"),
-            serde_json::json!({ "room": room })
+                .expect("create channel command is valid"),
+            serde_json::json!({ "channel": channel })
         );
         assert_eq!(
             serde_json::from_slice::<serde_json::Value>(&commands[1].payload)
-                .expect("join room command is valid"),
+                .expect("join channel command is valid"),
             serde_json::json!({
                 "connection_id": "33333333-3333-3333-3333-333333333333",
-                "room": room,
+                "channel": channel,
             })
         );
         assert_eq!(
             serde_json::from_slice::<serde_json::Value>(&commands[2].payload)
-                .expect("join room command is valid"),
+                .expect("join channel command is valid"),
             serde_json::json!({
                 "connection_id": "44444444-4444-4444-4444-444444444444",
-                "room": room,
+                "channel": channel,
             })
         );
     }
 
     #[test]
-    fn default_match_confirmed_script_notifies_match_room() {
+    fn default_match_confirmed_script_notifies_match_channel() {
         let mut engine = ScriptEngine::new(DEFAULT_SCRIPT_PATH);
         let event = serde_json::json!({
             "match_id": "11111111-1111-1111-1111-111111111111",
@@ -356,18 +359,17 @@ mod tests {
             .expect("event is handled");
 
         assert_eq!(commands.len(), 6);
-        assert_eq!(commands[0].subject, "commands.rooms.create");
-        assert_eq!(commands[1].subject, "commands.rooms.join");
-        assert_eq!(commands[2].subject, "commands.rooms.leave");
-        assert_eq!(commands[3].subject, "commands.rooms.join");
-        assert_eq!(commands[4].subject, "commands.rooms.leave");
-        assert_eq!(commands[5].subject, "commands.broadcast.rooms");
+        assert_eq!(commands[0].subject, "commands.channels.create");
+        assert_eq!(commands[1].subject, "commands.channels.join");
+        assert_eq!(commands[2].subject, "commands.channels.leave");
+        assert_eq!(commands[3].subject, "commands.channels.join");
+        assert_eq!(commands[4].subject, "commands.channels.leave");
+        assert_eq!(commands[5].subject, "commands.broadcast.channels");
 
-        let room = "match:11111111-1111-1111-1111-111111111111";
-        let broadcast =
-            serde_json::from_slice::<serde_json::Value>(&commands[5].payload)
-                .expect("broadcast command is valid json");
-        assert_eq!(broadcast["rooms"], serde_json::json!([room]));
+        let channel = "match:11111111-1111-1111-1111-111111111111";
+        let broadcast = serde_json::from_slice::<serde_json::Value>(&commands[5].payload)
+            .expect("broadcast command is valid json");
+        assert_eq!(broadcast["channels"], serde_json::json!([channel]));
 
         let payload = broadcast["payload"]
             .as_array()
@@ -385,7 +387,7 @@ mod tests {
 
         assert_eq!(message["type"], "match.found");
         assert_eq!(message["match_id"], "11111111-1111-1111-1111-111111111111");
-        assert_eq!(message["room"], room);
+        assert_eq!(message["channel"], channel);
         assert_eq!(message["ticket_key"], "duel");
     }
 

@@ -5,27 +5,27 @@ use thiserror::Error;
 use tokio::sync::mpsc::UnboundedSender;
 use uuid::Uuid;
 
-pub const DEFAULT_ROOM_ID: &str = "default";
+pub const DEFAULT_CHANNEL_ID: &str = "default";
 
 pub type Sender = UnboundedSender<Message>;
-pub type RoomId = String;
+pub type ChannelId = String;
 pub type ConnectionId = Uuid;
 
 #[derive(Debug)]
 pub struct MessageRouter {
     connections: HashMap<ConnectionId, Sender>,
-    rooms: HashMap<RoomId, HashSet<ConnectionId>>,
-    connection_rooms: HashMap<ConnectionId, HashSet<RoomId>>,
+    channels: HashMap<ChannelId, HashSet<ConnectionId>>,
+    connection_channels: HashMap<ConnectionId, HashSet<ChannelId>>,
 }
 
 #[derive(Debug, Error)]
 pub enum MessagingError {
     #[error("connection {conn_id} not found")]
     ConnectionNotFound { conn_id: ConnectionId },
-    #[error("room {room_id} not found")]
-    RoomNotFound { room_id: RoomId },
-    #[error("default room cannot be removed")]
-    CannotRemoveDefaultRoom,
+    #[error("channel {channel_id} not found")]
+    ChannelNotFound { channel_id: ChannelId },
+    #[error("default channel cannot be removed")]
+    CannotRemoveDefaultChannel,
 }
 
 impl MessageRouter {
@@ -35,7 +35,7 @@ impl MessageRouter {
         tx: Sender,
     ) -> Result<(), MessagingError> {
         self.connections.insert(conn_id, tx);
-        if let Err(error) = self.join_room(conn_id, DEFAULT_ROOM_ID) {
+        if let Err(error) = self.join_channel(conn_id, DEFAULT_CHANNEL_ID) {
             self.connections.remove(&conn_id);
             return Err(error);
         }
@@ -46,13 +46,13 @@ impl MessageRouter {
     pub fn remove_connection(&mut self, conn_id: ConnectionId) {
         self.connections.remove(&conn_id);
 
-        let Some(room_ids) = self.connection_rooms.remove(&conn_id) else {
+        let Some(channel_ids) = self.connection_channels.remove(&conn_id) else {
             return;
         };
 
-        for room_id in room_ids {
-            if let Some(room) = self.rooms.get_mut(&room_id) {
-                room.remove(&conn_id);
+        for channel_id in channel_ids {
+            if let Some(channel) = self.channels.get_mut(&channel_id) {
+                channel.remove(&conn_id);
             }
         }
     }
@@ -62,57 +62,57 @@ impl MessageRouter {
         self.send_to_connections(conn_ids, message);
     }
 
-    pub fn broadcast_to_rooms(&mut self, room_ids: &[RoomId], message: Message) {
+    pub fn broadcast_to_channels(&mut self, channel_ids: &[ChannelId], message: Message) {
         let mut conn_ids = HashSet::<ConnectionId>::new();
 
-        for room_id in room_ids {
-            if let Some(room) = self.rooms.get(room_id) {
-                conn_ids.extend(room.iter().copied());
+        for channel_id in channel_ids {
+            if let Some(channel) = self.channels.get(channel_id) {
+                conn_ids.extend(channel.iter().copied());
             }
         }
 
         self.send_to_connections(conn_ids.into_iter().collect(), message);
     }
 
-    pub fn create_room(&mut self, room_id: &str) {
-        self.rooms.entry(room_id.to_string()).or_default();
+    pub fn create_channel(&mut self, channel_id: &str) {
+        self.channels.entry(channel_id.to_string()).or_default();
     }
 
-    pub fn remove_room(&mut self, room_id: &str) -> Result<(), MessagingError> {
-        if room_id == DEFAULT_ROOM_ID {
-            return Err(MessagingError::CannotRemoveDefaultRoom);
+    pub fn remove_channel(&mut self, channel_id: &str) -> Result<(), MessagingError> {
+        if channel_id == DEFAULT_CHANNEL_ID {
+            return Err(MessagingError::CannotRemoveDefaultChannel);
         }
 
-        let Some(conn_ids) = self.rooms.remove(room_id) else {
+        let Some(conn_ids) = self.channels.remove(channel_id) else {
             return Ok(());
         };
 
         for conn_id in conn_ids {
-            if let Some(room_ids) = self.connection_rooms.get_mut(&conn_id) {
-                room_ids.remove(room_id);
+            if let Some(channel_ids) = self.connection_channels.get_mut(&conn_id) {
+                channel_ids.remove(channel_id);
             }
         }
 
         Ok(())
     }
 
-    pub fn all_rooms(&self) -> Vec<RoomId> {
-        let mut room_ids = self.rooms.keys().cloned().collect::<Vec<_>>();
-        room_ids.sort();
-        room_ids
+    pub fn all_channels(&self) -> Vec<ChannelId> {
+        let mut channel_ids = self.channels.keys().cloned().collect::<Vec<_>>();
+        channel_ids.sort();
+        channel_ids
     }
 
-    pub fn rooms_for_connection(
+    pub fn channels_for_connection(
         &self,
         conn_id: ConnectionId,
-    ) -> Result<Vec<RoomId>, MessagingError> {
-        let Some(room_ids) = self.connection_rooms.get(&conn_id) else {
+    ) -> Result<Vec<ChannelId>, MessagingError> {
+        let Some(channel_ids) = self.connection_channels.get(&conn_id) else {
             return Err(MessagingError::ConnectionNotFound { conn_id });
         };
 
-        let mut room_ids = room_ids.iter().cloned().collect::<Vec<_>>();
-        room_ids.sort();
-        Ok(room_ids)
+        let mut channel_ids = channel_ids.iter().cloned().collect::<Vec<_>>();
+        channel_ids.sort();
+        Ok(channel_ids)
     }
 
     fn send_to_connections(&mut self, conn_ids: Vec<ConnectionId>, message: Message) {
@@ -138,50 +138,50 @@ impl MessageRouter {
         }
     }
 
-    pub fn join_room(
+    pub fn join_channel(
         &mut self,
         conn_id: ConnectionId,
-        room_id: &str,
+        channel_id: &str,
     ) -> Result<(), MessagingError> {
         if !self.connections.contains_key(&conn_id) {
             return Err(MessagingError::ConnectionNotFound { conn_id });
         }
 
-        let Some(room) = self.rooms.get_mut(room_id) else {
-            return Err(MessagingError::RoomNotFound {
-                room_id: room_id.to_string(),
+        let Some(channel) = self.channels.get_mut(channel_id) else {
+            return Err(MessagingError::ChannelNotFound {
+                channel_id: channel_id.to_string(),
             });
         };
 
-        room.insert(conn_id);
+        channel.insert(conn_id);
 
-        self.connection_rooms
+        self.connection_channels
             .entry(conn_id)
             .or_default()
-            .insert(room_id.to_string());
+            .insert(channel_id.to_string());
 
         Ok(())
     }
 
-    pub fn leave_room(
+    pub fn leave_channel(
         &mut self,
         conn_id: ConnectionId,
-        room_id: &str,
+        channel_id: &str,
     ) -> Result<(), MessagingError> {
         if !self.connections.contains_key(&conn_id) {
             return Err(MessagingError::ConnectionNotFound { conn_id });
         }
 
-        let Some(room) = self.rooms.get_mut(room_id) else {
-            return Err(MessagingError::RoomNotFound {
-                room_id: room_id.to_string(),
+        let Some(channel) = self.channels.get_mut(channel_id) else {
+            return Err(MessagingError::ChannelNotFound {
+                channel_id: channel_id.to_string(),
             });
         };
 
-        room.remove(&conn_id);
+        channel.remove(&conn_id);
 
-        if let Some(room_ids) = self.connection_rooms.get_mut(&conn_id) {
-            room_ids.remove(room_id);
+        if let Some(channel_ids) = self.connection_channels.get_mut(&conn_id) {
+            channel_ids.remove(channel_id);
         }
 
         Ok(())
@@ -190,13 +190,16 @@ impl MessageRouter {
 
 impl Default for MessageRouter {
     fn default() -> Self {
-        let mut rooms = HashMap::<RoomId, HashSet<ConnectionId>>::new();
-        rooms.insert(DEFAULT_ROOM_ID.to_string(), HashSet::<ConnectionId>::new());
+        let mut channels = HashMap::<ChannelId, HashSet<ConnectionId>>::new();
+        channels.insert(
+            DEFAULT_CHANNEL_ID.to_string(),
+            HashSet::<ConnectionId>::new(),
+        );
 
         Self {
-            rooms,
+            channels,
             connections: Default::default(),
-            connection_rooms: Default::default(),
+            connection_channels: Default::default(),
         }
     }
 }
@@ -208,7 +211,7 @@ mod tests {
     use tokio::sync::mpsc;
 
     #[test]
-    fn broadcast_to_rooms_only_sends_to_room_members() {
+    fn broadcast_to_channels_only_sends_to_channel_members() {
         let mut router = MessageRouter::default();
         let alpha_conn = Uuid::new_v4();
         let beta_conn = Uuid::new_v4();
@@ -221,12 +224,12 @@ mod tests {
         router
             .add_connection(beta_conn, beta_tx)
             .expect("beta connection is added");
-        router.create_room("alpha");
+        router.create_channel("alpha");
         router
-            .join_room(alpha_conn, "alpha")
-            .expect("alpha connection joins alpha room");
+            .join_channel(alpha_conn, "alpha")
+            .expect("alpha connection joins alpha channel");
 
-        router.broadcast_to_rooms(&["alpha".to_string()], Message::Text("hello".into()));
+        router.broadcast_to_channels(&["alpha".to_string()], Message::Text("hello".into()));
 
         match alpha_rx.try_recv().expect("alpha receives message") {
             Message::Text(text) => assert_eq!(text.as_str(), "hello"),
@@ -236,7 +239,7 @@ mod tests {
     }
 
     #[test]
-    fn room_lifecycle_updates_room_membership_indexes() {
+    fn channel_lifecycle_updates_channel_membership_indexes() {
         let mut router = MessageRouter::default();
         let conn_id = Uuid::new_v4();
         let (tx, _rx) = mpsc::unbounded_channel();
@@ -244,36 +247,44 @@ mod tests {
         router
             .add_connection(conn_id, tx)
             .expect("connection is added");
-        router.create_room("match-1");
+        router.create_channel("match-1");
         router
-            .join_room(conn_id, "match-1")
-            .expect("connection joins room");
+            .join_channel(conn_id, "match-1")
+            .expect("connection joins channel");
 
         assert_eq!(
-            router.rooms_for_connection(conn_id).expect("rooms exist"),
+            router
+                .channels_for_connection(conn_id)
+                .expect("channels exist"),
             vec!["default".to_string(), "match-1".to_string()]
         );
         assert_eq!(
-            router.all_rooms(),
+            router.all_channels(),
             vec!["default".to_string(), "match-1".to_string()]
         );
 
         router
-            .leave_room(conn_id, "match-1")
-            .expect("connection leaves room");
+            .leave_channel(conn_id, "match-1")
+            .expect("connection leaves channel");
         assert_eq!(
-            router.rooms_for_connection(conn_id).expect("rooms exist"),
+            router
+                .channels_for_connection(conn_id)
+                .expect("channels exist"),
             vec!["default".to_string()]
         );
 
         router
-            .join_room(conn_id, "match-1")
-            .expect("connection rejoins room");
-        router.remove_room("match-1").expect("room is removed");
+            .join_channel(conn_id, "match-1")
+            .expect("connection rejoins channel");
+        router
+            .remove_channel("match-1")
+            .expect("channel is removed");
         assert_eq!(
-            router.rooms_for_connection(conn_id).expect("rooms exist"),
+            router
+                .channels_for_connection(conn_id)
+                .expect("channels exist"),
             vec!["default".to_string()]
         );
-        assert_eq!(router.all_rooms(), vec!["default".to_string()]);
+        assert_eq!(router.all_channels(), vec!["default".to_string()]);
     }
 }

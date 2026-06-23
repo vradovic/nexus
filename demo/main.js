@@ -59,7 +59,7 @@ const resetButton = document.querySelector("#reset-button");
 const flipButton = document.querySelector("#flip-button");
 const logList = document.querySelector("#log");
 const positionLabel = document.querySelector("#position-label");
-const roomLabel = document.querySelector("#room-label");
+const channelLabel = document.querySelector("#channel-label");
 const lastEvent = document.querySelector("#last-event");
 const moveCount = document.querySelector("#move-count");
 
@@ -76,8 +76,8 @@ let moves = 0;
 let queueBusy = false;
 let queuedTicket = null;
 let pendingMatch = null;
-let awaitingRoomMatchId = "";
-let awaitingRoomTicketKey = "";
+let awaitingChannelMatchId = "";
+let awaitingChannelTicketKey = "";
 let confirmingMatchId = "";
 let activeMatch = null;
 let matchmakingPollTimer = null;
@@ -213,7 +213,7 @@ async function handleRegisterSubmit() {
 async function startLobbySession() {
   syncIdentity();
   activeMatch = null;
-  roomLabel.textContent = "none";
+  channelLabel.textContent = "none";
   showPage("lobby");
   ensureWebSocketConnected();
   await refreshMatchmakingStatus().catch((error) => {
@@ -356,7 +356,7 @@ function showAuthError(target, error) {
 }
 
 async function joinQueue(ticketKey) {
-  if (!ticketKey || queueBusy || queuedTicket || pendingMatch || awaitingRoomMatchId) {
+  if (!ticketKey || queueBusy || queuedTicket || pendingMatch || awaitingChannelMatchId) {
     return;
   }
 
@@ -371,8 +371,8 @@ async function joinQueue(ticketKey) {
       body: { ticket_key: ticketKey },
     });
     pendingMatch = null;
-    awaitingRoomMatchId = "";
-    awaitingRoomTicketKey = "";
+    awaitingChannelMatchId = "";
+    awaitingChannelTicketKey = "";
     startMatchmakingPolling();
   } catch (error) {
     if (error.message.includes("already in queue") || error.message.includes("pending match")) {
@@ -386,7 +386,7 @@ async function joinQueue(ticketKey) {
 }
 
 async function leaveQueue() {
-  if (queueBusy || !queuedTicket || pendingMatch || awaitingRoomMatchId) {
+  if (queueBusy || !queuedTicket || pendingMatch || awaitingChannelMatchId) {
     return;
   }
 
@@ -398,8 +398,8 @@ async function leaveQueue() {
     await matchmakingRequest("leave", { method: "POST" });
     queuedTicket = null;
     pendingMatch = null;
-    awaitingRoomMatchId = "";
-    awaitingRoomTicketKey = "";
+    awaitingChannelMatchId = "";
+    awaitingChannelTicketKey = "";
     confirmedMatchIds.clear();
   } finally {
     queueBusy = false;
@@ -453,7 +453,7 @@ async function confirmPendingMatch(match) {
   if (
     confirmingMatchId === match.id ||
     confirmedMatchIds.has(match.id) ||
-    awaitingRoomMatchId === match.id
+    awaitingChannelMatchId === match.id
   ) {
     return;
   }
@@ -470,14 +470,14 @@ async function confirmPendingMatch(match) {
   try {
     await matchmakingRequest(`matches/${match.id}/confirm`, { method: "POST" });
     confirmedMatchIds.add(match.id);
-    awaitingRoomMatchId = match.id;
-    awaitingRoomTicketKey = match.ticket_key;
-    queueStatus.textContent = "Match confirmed. Opening room";
+    awaitingChannelMatchId = match.id;
+    awaitingChannelTicketKey = match.ticket_key;
+    queueStatus.textContent = "Match confirmed. Opening channel";
   } catch (error) {
     if (error.message.includes("timed out") || error.message.includes("not found")) {
       pendingMatch = null;
-      awaitingRoomMatchId = "";
-      awaitingRoomTicketKey = "";
+      awaitingChannelMatchId = "";
+      awaitingChannelTicketKey = "";
       confirmedMatchIds.delete(match.id);
     }
     throw error;
@@ -488,15 +488,16 @@ async function confirmPendingMatch(match) {
 }
 
 function renderLobbyState() {
-  const activeQueueKey = pendingMatch?.ticket_key || queuedTicket?.ticket_key || awaitingRoomTicketKey;
-  const hasQueueState = Boolean(queuedTicket || pendingMatch || awaitingRoomMatchId);
+  const activeQueueKey =
+    pendingMatch?.ticket_key || queuedTicket?.ticket_key || awaitingChannelTicketKey;
+  const hasQueueState = Boolean(queuedTicket || pendingMatch || awaitingChannelMatchId);
 
   queueLabel.textContent = activeQueueKey ? formatQueueName(activeQueueKey) : "none";
   ticketLabel.textContent = queuedTicket ? shortId(queuedTicket.id) : "none";
   matchLabel.textContent = pendingMatch
     ? shortId(pendingMatch.id)
-    : awaitingRoomMatchId
-      ? shortId(awaitingRoomMatchId)
+    : awaitingChannelMatchId
+      ? shortId(awaitingChannelMatchId)
       : "none";
   matchExpiresLabel.textContent = pendingMatch?.expires_at_unix_seconds
     ? secondsUntil(pendingMatch.expires_at_unix_seconds)
@@ -504,14 +505,14 @@ function renderLobbyState() {
 
   if (queueBusy) {
     queueStatus.textContent ||= "Working";
-  } else if (pendingMatch && awaitingRoomMatchId === pendingMatch.id) {
-    queueStatus.textContent = "Match confirmed. Opening room";
+  } else if (pendingMatch && awaitingChannelMatchId === pendingMatch.id) {
+    queueStatus.textContent = "Match confirmed. Opening channel";
   } else if (pendingMatch) {
     queueStatus.textContent = isSocketOpen()
       ? "Match found. Confirming"
       : "Match found. Connecting";
-  } else if (awaitingRoomMatchId) {
-    queueStatus.textContent = "Match confirmed. Opening room";
+  } else if (awaitingChannelMatchId) {
+    queueStatus.textContent = "Match confirmed. Opening channel";
   } else if (queuedTicket) {
     queueStatus.textContent = `Searching ${formatQueueName(queuedTicket.ticket_key)}`;
   } else {
@@ -524,7 +525,8 @@ function renderLobbyState() {
     button.disabled = queueBusy || hasQueueState;
   });
 
-  leaveQueueButton.disabled = queueBusy || !queuedTicket || Boolean(pendingMatch || awaitingRoomMatchId);
+  leaveQueueButton.disabled =
+    queueBusy || !queuedTicket || Boolean(pendingMatch || awaitingChannelMatchId);
 }
 
 function formatQueueName(ticketKey) {
@@ -668,7 +670,7 @@ function sendBoardPosition({ action, move, position = currentPosition }) {
     clientName,
     color,
     matchId: activeMatch?.matchId || null,
-    room: activeMatch?.room || null,
+    channel: activeMatch?.channel || null,
     move,
     moves,
     position: clonePosition(position),
@@ -714,8 +716,8 @@ function applyPayload(payload) {
   lastEvent.textContent = payload.type || "unknown";
 
   if (payload.type === "match.found") {
-    enterGameRoom(payload).catch((error) => {
-      writeLog(error.message || "failed to enter match room");
+    enterGameChannel(payload).catch((error) => {
+      writeLog(error.message || "failed to enter match channel");
     });
     return;
   }
@@ -751,11 +753,11 @@ function applyPayload(payload) {
   writeLog(`received ${payload.type || "unknown"} payload`);
 }
 
-async function enterGameRoom(payload) {
+async function enterGameChannel(payload) {
   const nextMatch = normalizeMatchPayload(payload);
 
-  if (!nextMatch.room || !nextMatch.matchId) {
-    throw new Error("match notification was missing room details");
+  if (!nextMatch.channel || !nextMatch.matchId) {
+    throw new Error("match notification was missing channel details");
   }
 
   if (activeMatch?.matchId === nextMatch.matchId && currentPage === "game") {
@@ -765,14 +767,14 @@ async function enterGameRoom(payload) {
   activeMatch = nextMatch;
   queuedTicket = null;
   pendingMatch = null;
-  awaitingRoomMatchId = "";
-  awaitingRoomTicketKey = "";
+  awaitingChannelMatchId = "";
+  awaitingChannelTicketKey = "";
   confirmedMatchIds.delete(nextMatch.matchId);
   stopMatchmakingPolling();
   renderLobbyState();
 
   resetBoardState();
-  roomLabel.textContent = nextMatch.room;
+  channelLabel.textContent = nextMatch.channel;
   showPage("game");
   await initializeBoard();
   board?.resize();
@@ -784,7 +786,7 @@ async function enterGameRoom(payload) {
     clientName,
     color,
     matchId: nextMatch.matchId,
-    room: nextMatch.room,
+    channel: nextMatch.channel,
     createdAt: Date.now(),
   });
 }
@@ -793,7 +795,7 @@ function normalizeMatchPayload(payload) {
   return {
     type: payload.type,
     matchId: payload.matchId || payload.match_id || "",
-    room: payload.room || "",
+    channel: payload.channel || "",
     ticketKey: payload.ticketKey || payload.ticket_key || "",
     playerIds: payload.playerIds || payload.player_ids || [],
   };
@@ -802,8 +804,8 @@ function normalizeMatchPayload(payload) {
 function resetSessionState() {
   queuedTicket = null;
   pendingMatch = null;
-  awaitingRoomMatchId = "";
-  awaitingRoomTicketKey = "";
+  awaitingChannelMatchId = "";
+  awaitingChannelTicketKey = "";
   confirmingMatchId = "";
   activeMatch = null;
   queueBusy = false;
@@ -817,7 +819,7 @@ function resetSessionState() {
 function resetBoardState() {
   currentPosition = START_POSITION;
   moves = 0;
-  roomLabel.textContent = "none";
+  channelLabel.textContent = "none";
   lastEvent.textContent = "none";
   moveCount.textContent = "0";
   logList.replaceChildren();
