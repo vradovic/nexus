@@ -747,6 +747,9 @@ function applyPayload(payload) {
     moves = Number.isFinite(payload.moves) ? payload.moves : moves;
     moveCount.textContent = String(moves);
     writeMoveLog(payload);
+    if (payload.match_over) {
+      handleMatchOver(payload);
+    }
     return;
   }
 
@@ -789,6 +792,27 @@ async function enterGameChannel(payload) {
     channel: nextMatch.channel,
     createdAt: Date.now(),
   });
+}
+
+function handleMatchOver(payload) {
+  const summary = matchOverSummary(payload);
+  const finishedMatchId = payload.matchId || payload.match_id || activeMatch?.matchId || "";
+
+  activeMatch = null;
+  queuedTicket = null;
+  pendingMatch = null;
+  awaitingChannelMatchId = "";
+  awaitingChannelTicketKey = "";
+  confirmingMatchId = "";
+  if (finishedMatchId) {
+    confirmedMatchIds.delete(finishedMatchId);
+  }
+
+  resetBoardState();
+  showPage("lobby");
+  renderLobbyState();
+  queueStatus.textContent = summary;
+  startMatchmakingPolling();
 }
 
 function normalizeMatchPayload(payload) {
@@ -843,6 +867,16 @@ function updatePositionLabel(position) {
 }
 
 function writeMoveLog(payload) {
+  if (payload.match_over) {
+    writeLog(matchOverSummary(payload));
+    return;
+  }
+
+  if (payload.action === "rejected") {
+    writeLog(payload.error || "move rejected");
+    return;
+  }
+
   if (payload.action === "reset") {
     writeLog(`${payload.clientName || "player"} reset the board`);
     return;
@@ -860,6 +894,24 @@ function writeMoveLog(payload) {
   }
 
   writeLog(`${payload.clientName || "player"} updated the board`);
+}
+
+function matchOverSummary(payload) {
+  if (payload.end_reason === "checkmate") {
+    return `Checkmate. ${winnerLabel(payload.winner)} wins.`;
+  }
+
+  if (payload.end_reason === "stalemate") {
+    return "Stalemate. Match over.";
+  }
+
+  return "Match over.";
+}
+
+function winnerLabel(winner) {
+  if (winner === "w") return "White";
+  if (winner === "b") return "Black";
+  return "No one";
 }
 
 function isSocketOpen() {

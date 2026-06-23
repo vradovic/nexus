@@ -1,5 +1,6 @@
 mod app;
 mod commands;
+mod events;
 mod messaging;
 
 use std::sync::Arc;
@@ -32,11 +33,16 @@ async fn main() {
         .commands_reader(commands::consumer_name())
         .await
         .expect("failed to initialize realtime command reader");
+    let event_reader = nats
+        .events_reader(events::consumer_name())
+        .await
+        .expect("failed to initialize realtime event reader");
     tracing::info!("connected to nats");
 
     let state = Arc::new(app::AppState::new(nats, jwt_secret));
     let command_handler = RealtimeCommandHandler::new(state.message_router());
     tokio::spawn(commands::run_command_loop(command_reader, command_handler));
+    tokio::spawn(events::run_event_loop(event_reader, Arc::clone(&state)));
 
     let address = dotenvy::var("SERVICE_ADDRESS").unwrap();
     let listener = TcpListener::bind(&address).await.unwrap();

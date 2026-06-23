@@ -6,7 +6,9 @@ use serde::Deserialize;
 use thiserror::Error;
 use tokio::sync::Mutex;
 
-use crate::messaging::{ChannelId, ConnectionId, MessageRouter, MessagingError};
+use crate::messaging::{
+    ChannelId, ConnectionId, DEFAULT_CHANNEL_ID, MessageRouter, MessagingError,
+};
 
 const COMMANDS_CONSUMER: &str = "realtime-service";
 const BROADCAST_SUBJECT: &str = "commands.broadcast";
@@ -28,6 +30,7 @@ pub enum RealtimeCommand {
     BroadcastChannels {
         channels: Vec<ChannelId>,
         message: Message,
+        close_channels: bool,
     },
     CreateChannel {
         channel: ChannelId,
@@ -101,8 +104,19 @@ impl RealtimeCommandHandler {
             RealtimeCommand::Broadcast { message } => {
                 message_router.broadcast(message);
             }
-            RealtimeCommand::BroadcastChannels { channels, message } => {
+            RealtimeCommand::BroadcastChannels {
+                channels,
+                message,
+                close_channels,
+            } => {
                 message_router.broadcast_to_channels(&channels, message);
+                if close_channels {
+                    for channel in channels {
+                        if channel != DEFAULT_CHANNEL_ID {
+                            message_router.remove_channel(&channel)?;
+                        }
+                    }
+                }
             }
             RealtimeCommand::CreateChannel { channel } => {
                 message_router.create_channel(&channel);
@@ -174,10 +188,12 @@ fn parse_broadcast(message: &NatsMessage) -> Result<RealtimeCommand, CommandErro
 
 fn parse_channel_broadcast(message: &NatsMessage) -> Result<RealtimeCommand, CommandError> {
     let command = message.decode::<ChannelBroadcastCommand>()?;
+    let close_channels = payload_closes_channels(&command.payload);
 
     Ok(RealtimeCommand::BroadcastChannels {
         channels: command.channels,
         message: Message::Binary(command.payload.into()),
+        close_channels,
     })
 }
 
@@ -213,4 +229,67 @@ fn parse_channel_leave(message: &NatsMessage) -> Result<RealtimeCommand, Command
         connection_id: command.connection_id,
         channel: command.channel,
     })
+}
+
+fn payload_closes_channels(payload: &[u8]) -> bool {
+    serde_json::from_slice::<serde_json::Value>(payload)
+        .ok()
+        .and_then(|value| value.get("match_over").and_then(serde_json::Value::as_bool))
+        .unwrap_or(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use tokio::sync::mpsc;
+    use uuid::Uuid;
+
+    #[tokio::test]
+    async fn match_over_channel_broadcast_removes_match_channel_after_delivery() {
+        let router = Arc::new(Mutex::new(MessageRouter::default()));
+        let conn_id = Uuid::new_v4();
+        let (tx, mut rx) = mpsc::unbounded_channel();
+
+        {
+            let mut router = router.lock().await;
+            router
+                .add_connection(conn_id, tx)
+                .expect("connection is added");
+            router.create_channel("match:alpha");
+            router
+                .join_channel(conn_id, "match:alpha")
+                .expect("connection joins match channel");
+        }
+
+        let handler = RealtimeCommandHandler::new(Arc::clone(&router));
+        handler
+            .handle(RealtimeCommand::BroadcastChannels {
+                channels: vec!["match:alpha".to_string()],
+                message: Message::Text(r#"{"match_over":true}"#.into()),
+                close_channels: true,
+            })
+            .await
+            .expect("command is handled");
+
+        match rx.try_recv().expect("final message is delivered") {
+            Message::Text(text) => assert_eq!(text.as_str(), r#"{"match_over":true}"#),
+            message => panic!("unexpected message: {message:?}"),
+        }
+
+        let router = router.lock().await;
+        assert_eq!(
+            router.channels_for_connection(conn_id).expect("channels"),
+            vec![DEFAULT_CHANNEL_ID.to_string()]
+        );
+        assert_eq!(router.all_channels(), vec![DEFAULT_CHANNEL_ID.to_string()]);
+    }
+
+    #[test]
+    fn only_match_over_true_payloads_close_channels() {
+        assert!(payload_closes_channels(br#"{"match_over":true}"#));
+        assert!(!payload_closes_channels(br#"{"match_over":false}"#));
+        assert!(!payload_closes_channels(br#"{"type":"chess.position"}"#));
+        assert!(!payload_closes_channels(b"not json"));
+    }
 }

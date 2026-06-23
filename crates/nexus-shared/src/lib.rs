@@ -11,8 +11,9 @@ pub use auth::{
 };
 pub use error::AppError;
 pub use matchmaking::{
-    MATCH_CONFIRMED_SUBJECT, MATCH_DECLINED_SUBJECT, MATCH_FOUND_SUBJECT, MATCH_TIMED_OUT_SUBJECT,
-    MatchConfirmedEvent, MatchDeclinedEvent, MatchFoundEvent, MatchTimedOutEvent,
+    MATCH_CHANNEL_READY_SUBJECT, MATCH_CONFIRMED_SUBJECT, MATCH_DECLINED_SUBJECT,
+    MATCH_FOUND_SUBJECT, MATCH_TIMED_OUT_SUBJECT, MatchChannelReadyEvent, MatchConfirmedEvent,
+    MatchDeclinedEvent, MatchFoundEvent, MatchTimedOutEvent,
 };
 pub use messaging::{ensure_pull_consumer, ensure_stream, publish_json};
 pub use redis_store::{read_json, write_json};
