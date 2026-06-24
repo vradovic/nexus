@@ -2,7 +2,9 @@ use nexus_shared::AppError;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::models::{Friend, FriendRequest, FriendRequestView, UserProfile, UserRegisteredEvent};
+use crate::models::{
+    BlockedUser, Friend, FriendRequest, FriendRequestView, UserProfile, UserRegisteredEvent,
+};
 
 #[derive(Clone)]
 pub struct UserProfileRepository {
@@ -103,6 +105,30 @@ impl UserProfileRepository {
         Ok(exists)
     }
 
+    pub async fn block_exists_between(
+        &self,
+        user_id: Uuid,
+        other_user_id: Uuid,
+    ) -> Result<bool, AppError> {
+        let exists = sqlx::query_scalar::<_, bool>(
+            r#"
+            select exists (
+                select 1
+                from user_blocks
+                where (blocker_id = $1 and blocked_id = $2)
+                   or (blocker_id = $2 and blocked_id = $1)
+            )
+            "#,
+        )
+        .bind(user_id)
+        .bind(other_user_id)
+        .fetch_one(&self.db)
+        .await
+        .map_err(|_| AppError::internal("database operation failed"))?;
+
+        Ok(exists)
+    }
+
     pub async fn list_friends(&self, user_id: Uuid) -> Result<Vec<Friend>, AppError> {
         sqlx::query_as::<_, Friend>(
             r#"
@@ -129,6 +155,127 @@ impl UserProfileRepository {
             "#,
         )
         .bind(user_id)
+        .fetch_all(&self.db)
+        .await
+        .map_err(|_| AppError::internal("database operation failed"))
+    }
+
+    pub async fn block_user(
+        &self,
+        blocker_id: Uuid,
+        blocked_id: Uuid,
+    ) -> Result<BlockedUser, AppError> {
+        let mut tx = self
+            .db
+            .begin()
+            .await
+            .map_err(|_| AppError::internal("database operation failed"))?;
+
+        sqlx::query(
+            r#"
+            update friend_requests
+            set status = 'declined',
+                responded_at = now()
+            where status = 'pending'
+              and (
+                  (requester_id = $1 and recipient_id = $2)
+                  or (requester_id = $2 and recipient_id = $1)
+              )
+            "#,
+        )
+        .bind(blocker_id)
+        .bind(blocked_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| AppError::internal("database operation failed"))?;
+
+        sqlx::query(
+            r#"
+            delete from friendships
+            where least(user_a_id, user_b_id) = least($1::uuid, $2::uuid)
+              and greatest(user_a_id, user_b_id) = greatest($1::uuid, $2::uuid)
+            "#,
+        )
+        .bind(blocker_id)
+        .bind(blocked_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|_| AppError::internal("database operation failed"))?;
+
+        let blocked_user = sqlx::query_as::<_, BlockedUser>(
+            r#"
+            with inserted as (
+                insert into user_blocks (id, blocker_id, blocked_id)
+                values ($1, $2, $3)
+                on conflict (blocker_id, blocked_id) do update
+                set blocked_id = excluded.blocked_id
+                returning id, blocked_id
+            )
+            select
+                inserted.id as block_id,
+                inserted.blocked_id as blocked_user_id,
+                user_profiles.first_name,
+                user_profiles.last_name
+            from inserted
+            join user_profiles on user_profiles.id = inserted.blocked_id
+            "#,
+        )
+        .bind(Uuid::new_v4())
+        .bind(blocker_id)
+        .bind(blocked_id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|error| match error {
+            sqlx::Error::Database(db_error)
+                if db_error.constraint() == Some("user_blocks_check") =>
+            {
+                AppError::bad_request("cannot block yourself")
+            }
+            sqlx::Error::Database(db_error) if db_error.is_foreign_key_violation() => {
+                AppError::not_found("user profile not found")
+            }
+            _ => AppError::internal("database operation failed"),
+        })?;
+
+        tx.commit()
+            .await
+            .map_err(|_| AppError::internal("database operation failed"))?;
+
+        Ok(blocked_user)
+    }
+
+    pub async fn unblock_user(&self, blocker_id: Uuid, blocked_id: Uuid) -> Result<(), AppError> {
+        sqlx::query(
+            r#"
+            delete from user_blocks
+            where blocker_id = $1
+              and blocked_id = $2
+            "#,
+        )
+        .bind(blocker_id)
+        .bind(blocked_id)
+        .execute(&self.db)
+        .await
+        .map_err(|_| AppError::internal("database operation failed"))?;
+
+        Ok(())
+    }
+
+    pub async fn list_blocked_users(&self, blocker_id: Uuid) -> Result<Vec<BlockedUser>, AppError> {
+        sqlx::query_as::<_, BlockedUser>(
+            r#"
+            select
+                user_blocks.id as block_id,
+                user_blocks.blocked_id as blocked_user_id,
+                user_profiles.first_name,
+                user_profiles.last_name
+            from user_blocks
+            join user_profiles on user_profiles.id = user_blocks.blocked_id
+            where user_blocks.blocker_id = $1
+            order by user_profiles.first_name, user_profiles.last_name, user_blocks.blocked_id
+            "#,
+        )
+        .bind(blocker_id)
         .fetch_all(&self.db)
         .await
         .map_err(|_| AppError::internal("database operation failed"))
@@ -234,6 +381,31 @@ impl UserProfileRepository {
                 .map_err(|_| AppError::internal("database operation failed"))?;
             return Ok(None);
         };
+
+        let blocked = sqlx::query_scalar::<_, bool>(
+            r#"
+            select exists (
+                select 1
+                from user_blocks
+                where (blocker_id = $1 and blocked_id = $2)
+                   or (blocker_id = $2 and blocked_id = $1)
+            )
+            "#,
+        )
+        .bind(request.requester_id)
+        .bind(request.recipient_id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|_| AppError::internal("database operation failed"))?;
+
+        if blocked {
+            tx.rollback()
+                .await
+                .map_err(|_| AppError::internal("database operation failed"))?;
+            return Err(AppError::forbidden(
+                "friend requests are disabled between blocked users",
+            ));
+        }
 
         sqlx::query(
             r#"

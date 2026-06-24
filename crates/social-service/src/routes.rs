@@ -1,9 +1,10 @@
 use axum::{
     Extension, Json, Router,
     extract::{Path, Request, State},
+    http::StatusCode,
     middleware::{self, Next},
-    response::Response,
-    routing::{get, post},
+    response::{IntoResponse, Response},
+    routing::{delete, get, post},
 };
 use nexus_shared::{AppError, AuthenticatedUser, authenticated_user};
 use tower_http::cors::CorsLayer;
@@ -11,13 +12,16 @@ use uuid::Uuid;
 
 use crate::app_state::AppState;
 use crate::models::{
-    Friend, FriendRequest, FriendRequestsResponse, SendFriendRequest, UserProfile,
+    BlockUserRequest, BlockedUser, Friend, FriendRequest, FriendRequestsResponse,
+    SendFriendRequest, UserProfile,
 };
 use crate::service;
 
 pub fn app_router(state: AppState) -> Router {
     let authenticated_routes = Router::new()
         .route("/friends", get(list_friends))
+        .route("/blocks", get(list_blocks).post(block_user))
+        .route("/blocks/{blocked_user_id}", delete(unblock_user))
         .route(
             "/friend-requests",
             get(list_friend_requests).post(send_friend_request),
@@ -78,6 +82,46 @@ async fn list_friends(
     let friends = service::list_friends(&state.user_profile_repository, user.user_id).await?;
 
     Ok(Json(friends))
+}
+
+async fn block_user(
+    State(state): State<AppState>,
+    Extension(user): Extension<AuthenticatedUser>,
+    Json(payload): Json<BlockUserRequest>,
+) -> Result<Json<BlockedUser>, AppError> {
+    let blocked = service::block_user(
+        &state.user_profile_repository,
+        user.user_id,
+        payload.blocked_user_id,
+    )
+    .await?;
+
+    Ok(Json(blocked))
+}
+
+async fn unblock_user(
+    State(state): State<AppState>,
+    Extension(user): Extension<AuthenticatedUser>,
+    Path(blocked_user_id): Path<Uuid>,
+) -> Result<Response, AppError> {
+    service::unblock_user(
+        &state.user_profile_repository,
+        user.user_id,
+        blocked_user_id,
+    )
+    .await?;
+
+    Ok(StatusCode::NO_CONTENT.into_response())
+}
+
+async fn list_blocks(
+    State(state): State<AppState>,
+    Extension(user): Extension<AuthenticatedUser>,
+) -> Result<Json<Vec<BlockedUser>>, AppError> {
+    let blocked_users =
+        service::list_blocked_users(&state.user_profile_repository, user.user_id).await?;
+
+    Ok(Json(blocked_users))
 }
 
 async fn list_friend_requests(

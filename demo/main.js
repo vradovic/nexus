@@ -55,6 +55,7 @@ const friendsStatus = document.querySelector("#friends-status");
 const friendsList = document.querySelector("#friends-list");
 const incomingFriendRequestsList = document.querySelector("#incoming-friend-requests");
 const outgoingFriendRequestsList = document.querySelector("#outgoing-friend-requests");
+const blockedUsersList = document.querySelector("#blocked-users-list");
 
 const queueButtons = document.querySelectorAll("[data-ticket-key]");
 const queueStatus = document.querySelector("#queue-status");
@@ -74,6 +75,8 @@ const moveCount = document.querySelector("#move-count");
 const opponentLabel = document.querySelector("#opponent-label");
 const sendFriendRequestButton = document.querySelector("#send-friend-request-button");
 const friendRequestStatus = document.querySelector("#friend-request-status");
+const blockOpponentButton = document.querySelector("#block-opponent-button");
+const blockStatus = document.querySelector("#block-status");
 
 let board = null;
 let socket = null;
@@ -95,9 +98,11 @@ let activeMatch = null;
 let matchmakingPollTimer = null;
 let statusRequestInFlight = false;
 let friendRequestBusy = false;
+let blockBusy = false;
 let friendsRequestInFlight = false;
 const confirmedMatchIds = new Set();
 const sentFriendRequestRecipientIds = new Set();
+const blockedUserIds = new Set();
 
 if (authProfile?.email) {
   loginEmailInput.value = authProfile.email;
@@ -185,6 +190,15 @@ incomingFriendRequestsList.addEventListener("click", (event) => {
   );
 });
 
+blockedUsersList.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-unblock-user-id]");
+  if (!button) return;
+
+  unblockUser(button.dataset.unblockUserId).catch((error) => {
+    friendsStatus.textContent = error.message || "Failed to unblock user.";
+  });
+});
+
 resetButton.addEventListener("click", () => {
   setBoardPosition(START_POSITION, true);
   moves = 0;
@@ -204,6 +218,14 @@ sendFriendRequestButton.addEventListener("click", () => {
     friendRequestBusy = false;
     renderGameSocialState();
     friendRequestStatus.textContent = error.message || "Failed to send friend request.";
+  });
+});
+
+blockOpponentButton.addEventListener("click", () => {
+  blockOpponent().catch((error) => {
+    blockBusy = false;
+    renderGameSocialState();
+    blockStatus.textContent = error.message || "Failed to block player.";
   });
 });
 
@@ -270,6 +292,7 @@ async function startLobbySession() {
   channelLabel.textContent = "none";
   showPage("lobby");
   ensureWebSocketConnected();
+  await refreshBlockedUsers().catch(() => {});
   await refreshMatchmakingStatus().catch((error) => {
     queueStatus.textContent = error.message || "Failed to refresh matchmaking.";
   });
@@ -551,15 +574,26 @@ async function loadFriendsPage() {
   friendsStatus.textContent = "Loading";
 
   try {
-    const [friends, requests] = await Promise.all([
+    const [friends, requests, blockedUsers] = await Promise.all([
       socialRequest("friends"),
       socialRequest("friend-requests"),
+      socialRequest("blocks"),
     ]);
-    renderFriendsPage(friends || [], requests || { incoming: [], outgoing: [] });
+    renderFriendsPage(
+      friends || [],
+      requests || { incoming: [], outgoing: [] },
+      blockedUsers || [],
+    );
     friendsStatus.textContent = "Ready";
   } finally {
     friendsRequestInFlight = false;
   }
+}
+
+async function refreshBlockedUsers() {
+  const blockedUsers = await socialRequest("blocks");
+  syncBlockedUsers(blockedUsers || []);
+  renderGameSocialState();
 }
 
 async function handleFriendRequestAction(action, requestId) {
@@ -572,11 +606,13 @@ async function handleFriendRequestAction(action, requestId) {
   await loadFriendsPage();
 }
 
-function renderFriendsPage(friends, requests) {
+function renderFriendsPage(friends, requests, blockedUsers) {
   sentFriendRequestRecipientIds.clear();
   for (const request of requests.outgoing || []) {
     sentFriendRequestRecipientIds.add(request.recipient_id);
   }
+
+  syncBlockedUsers(blockedUsers || []);
 
   friendsList.replaceChildren(
     ...listItemsOrEmpty(
@@ -620,7 +656,30 @@ function renderFriendsPage(friends, requests) {
     ),
   );
 
+  blockedUsersList.replaceChildren(
+    ...listItemsOrEmpty(
+      blockedUsers || [],
+      (blockedUser) =>
+        blockedUserItem(
+          profileName(
+            blockedUser.first_name,
+            blockedUser.last_name,
+            blockedUser.blocked_user_id,
+          ),
+          blockedUser.blocked_user_id,
+        ),
+      "No blocked users",
+    ),
+  );
+
   renderGameSocialState();
+}
+
+function syncBlockedUsers(blockedUsers) {
+  blockedUserIds.clear();
+  for (const blockedUser of blockedUsers || []) {
+    blockedUserIds.add(blockedUser.blocked_user_id);
+  }
 }
 
 async function confirmPendingMatch(match) {
@@ -757,6 +816,21 @@ function socialRequestItem({ label, requestId, actions }) {
   declineButton.textContent = "Decline";
 
   actionGroup.append(acceptButton, declineButton);
+  item.append(actionGroup);
+  return item;
+}
+
+function blockedUserItem(label, blockedUserId) {
+  const item = socialListItem(label);
+  const actionGroup = document.createElement("div");
+  actionGroup.className = "social-list-actions";
+
+  const unblockButton = document.createElement("button");
+  unblockButton.type = "button";
+  unblockButton.dataset.unblockUserId = blockedUserId;
+  unblockButton.textContent = "Unblock";
+
+  actionGroup.append(unblockButton);
   item.append(actionGroup);
   return item;
 }
@@ -1002,6 +1076,7 @@ async function enterGameChannel(payload) {
 
   resetBoardState();
   channelLabel.textContent = nextMatch.channel;
+  await refreshBlockedUsers().catch(() => {});
   renderGameSocialState();
   showPage("game");
   await initializeBoard();
@@ -1078,7 +1153,12 @@ function resetBoardState() {
 
 async function sendFriendRequestToOpponent() {
   const recipientId = opponentId();
-  if (!recipientId || friendRequestBusy || sentFriendRequestRecipientIds.has(recipientId)) {
+  if (
+    !recipientId ||
+    friendRequestBusy ||
+    sentFriendRequestRecipientIds.has(recipientId) ||
+    blockedUserIds.has(recipientId)
+  ) {
     return;
   }
 
@@ -1099,8 +1179,53 @@ async function sendFriendRequestToOpponent() {
   }
 }
 
+async function blockOpponent() {
+  const blockedUserId = opponentId();
+  if (!blockedUserId || blockBusy || blockedUserIds.has(blockedUserId)) {
+    return;
+  }
+
+  blockBusy = true;
+  renderGameSocialState();
+  blockStatus.textContent = "Blocking";
+
+  try {
+    const blockedUser = await socialRequest("blocks", {
+      method: "POST",
+      body: { blocked_user_id: blockedUserId },
+    });
+    blockedUserIds.add(blockedUser?.blocked_user_id || blockedUserId);
+    blockStatus.textContent = "Player blocked";
+    friendRequestStatus.textContent = "";
+    if (currentPage === "friends") {
+      await loadFriendsPage();
+    }
+  } finally {
+    blockBusy = false;
+    renderGameSocialState();
+  }
+}
+
+async function unblockUser(blockedUserId) {
+  if (!blockedUserId) {
+    return;
+  }
+
+  friendsStatus.textContent = "Updating";
+  await socialRequest(`blocks/${blockedUserId}`, { method: "DELETE" });
+  blockedUserIds.delete(blockedUserId);
+  await loadFriendsPage();
+  renderGameSocialState();
+}
+
 function renderGameSocialState() {
-  if (!opponentLabel || !sendFriendRequestButton || !friendRequestStatus) {
+  if (
+    !opponentLabel ||
+    !sendFriendRequestButton ||
+    !friendRequestStatus ||
+    !blockOpponentButton ||
+    !blockStatus
+  ) {
     return;
   }
 
@@ -1110,18 +1235,32 @@ function renderGameSocialState() {
   if (!recipientId) {
     sendFriendRequestButton.disabled = true;
     friendRequestStatus.textContent = "";
+    blockOpponentButton.disabled = true;
+    blockStatus.textContent = "";
+    return;
+  }
+
+  if (blockedUserIds.has(recipientId)) {
+    sendFriendRequestButton.disabled = true;
+    friendRequestStatus.textContent = "";
+    blockOpponentButton.disabled = true;
+    blockStatus.textContent ||= "Player blocked";
     return;
   }
 
   if (sentFriendRequestRecipientIds.has(recipientId)) {
     sendFriendRequestButton.disabled = true;
     friendRequestStatus.textContent ||= "Friend request sent";
-    return;
+  } else {
+    sendFriendRequestButton.disabled = friendRequestBusy;
+    if (!friendRequestBusy) {
+      friendRequestStatus.textContent = "";
+    }
   }
 
-  sendFriendRequestButton.disabled = friendRequestBusy;
-  if (!friendRequestBusy) {
-    friendRequestStatus.textContent = "";
+  blockOpponentButton.disabled = blockBusy;
+  if (!blockBusy) {
+    blockStatus.textContent = "";
   }
 }
 

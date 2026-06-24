@@ -2,7 +2,7 @@ use nexus_shared::AppError;
 use uuid::Uuid;
 
 use crate::models::{
-    Friend, FriendRequest, FriendRequestsResponse, UserProfile, UserRegisteredEvent,
+    BlockedUser, Friend, FriendRequest, FriendRequestsResponse, UserProfile, UserRegisteredEvent,
 };
 use crate::repository::UserProfileRepository;
 
@@ -39,6 +39,15 @@ pub async fn send_friend_request(
         .await?
     {
         return Err(AppError::conflict("users are already friends"));
+    }
+
+    if repository
+        .block_exists_between(requester_id, recipient_id)
+        .await?
+    {
+        return Err(AppError::forbidden(
+            "friend requests are disabled between blocked users",
+        ));
     }
 
     repository
@@ -83,4 +92,31 @@ pub async fn decline_friend_request(
         .decline_friend_request(request_id, recipient_id)
         .await?
         .ok_or_else(|| AppError::not_found("pending friend request not found"))
+}
+
+pub async fn block_user(
+    repository: &UserProfileRepository,
+    blocker_id: Uuid,
+    blocked_id: Uuid,
+) -> Result<BlockedUser, AppError> {
+    if blocker_id == blocked_id {
+        return Err(AppError::bad_request("cannot block yourself"));
+    }
+
+    repository.block_user(blocker_id, blocked_id).await
+}
+
+pub async fn unblock_user(
+    repository: &UserProfileRepository,
+    blocker_id: Uuid,
+    blocked_id: Uuid,
+) -> Result<(), AppError> {
+    repository.unblock_user(blocker_id, blocked_id).await
+}
+
+pub async fn list_blocked_users(
+    repository: &UserProfileRepository,
+    blocker_id: Uuid,
+) -> Result<Vec<BlockedUser>, AppError> {
+    repository.list_blocked_users(blocker_id).await
 }

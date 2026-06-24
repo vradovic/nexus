@@ -21,6 +21,11 @@ pub struct SendFriendRequest {
     pub recipient_id: Uuid,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct BlockUserRequest {
+    pub blocked_user_id: Uuid,
+}
+
 #[derive(Debug, Serialize, FromRow)]
 pub struct FriendRequest {
     pub id: Uuid,
@@ -51,6 +56,14 @@ pub struct FriendRequestsResponse {
 pub struct Friend {
     pub friendship_id: Uuid,
     pub friend_id: Uuid,
+    pub first_name: String,
+    pub last_name: String,
+}
+
+#[derive(Debug, Serialize, FromRow)]
+pub struct BlockedUser {
+    pub block_id: Uuid,
+    pub blocked_user_id: Uuid,
     pub first_name: String,
     pub last_name: String,
 }

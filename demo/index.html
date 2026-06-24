@@ -181,6 +181,11 @@
               <h2>Sent</h2>
               <ol id="outgoing-friend-requests" class="social-list"></ol>
             </section>
+
+            <section>
+              <h2>Blocked</h2>
+              <ol id="blocked-users-list" class="social-list"></ol>
+            </section>
           </div>
         </section>
       </main>
@@ -248,6 +253,10 @@
             <div class="social-actions">
               <button id="send-friend-request-button" type="button" disabled>Add friend</button>
               <p id="friend-request-status" aria-live="polite"></p>
+              <button id="block-opponent-button" class="danger-button" type="button" disabled>
+                Block
+              </button>
+              <p id="block-status" aria-live="polite"></p>
             </div>
           </section>
 

@@ -341,7 +341,7 @@ h2 {
 
 .social-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 16px;
 }
 
@@ -377,6 +377,15 @@ h2 {
 
 .social-list-actions button {
   height: 30px;
+}
+
+.danger-button {
+  border-color: #9f3434;
+  background: #9f3434;
+}
+
+.danger-button:hover {
+  background: #842929;
 }
 
 .board-stage {
