@@ -3,7 +3,7 @@ use sqlx::postgres::PgPoolOptions;
 
 pub async fn init_db() -> PgPool {
     let database_url = std::env::var("DATABASE_URL")
-        .expect("DATABASE_URL must be set before starting users-service");
+        .expect("DATABASE_URL must be set before starting social-service");
 
     let pool = PgPoolOptions::new()
         .max_connections(5)

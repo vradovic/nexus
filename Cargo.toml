@@ -5,6 +5,6 @@ members = [
     "crates/matchmaking-service",
     "crates/nexus-shared",
     "crates/realtime-service",
-    "crates/users-service",
+    "crates/social-service",
 ]
 resolver = "3"

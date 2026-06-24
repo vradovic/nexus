@@ -368,6 +368,18 @@ h2 {
   color: #343d4a;
 }
 
+.social-actions {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.social-actions p {
+  min-height: 18px;
+  color: #4f5b6b;
+  font-size: 13px;
+}
+
 dl {
   display: grid;
   gap: 10px;

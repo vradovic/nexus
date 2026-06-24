@@ -11,17 +11,17 @@ services:
     volumes:
       - auth_pgdata:/var/lib/postgresql
 
-  users-db:
+  social-db:
     image: postgres:18
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: users_db
+      POSTGRES_DB: social_db
     ports:
       - "5434:5432"
     volumes:
-      - users_pgdata:/var/lib/postgresql
+      - social_pgdata:/var/lib/postgresql
 
   matchmaking-db:
     image: postgres:18
@@ -72,7 +72,7 @@ services:
     restart: unless-stopped
     depends_on:
       - auth-db
-      - users-db
+      - social-db
       - matchmaking-db
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@nexus.com
@@ -90,4 +90,4 @@ volumes:
   matchmaking_pgdata:
   pgadmin_data:
   redisinsight_data:
-  users_pgdata:
+  social_pgdata:

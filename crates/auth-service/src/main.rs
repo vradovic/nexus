@@ -11,7 +11,7 @@ use std::net::SocketAddr;
 use app_state::AppState;
 use axum::Router;
 use db::init_db;
-use messaging::ensure_registration_stream;
+use messaging::ensure_events_stream;
 
 #[tokio::main]
 async fn main() {
@@ -25,7 +25,7 @@ async fn main() {
     let nats_client = async_nats::connect(nats_url)
         .await
         .expect("failed to connect to nats");
-    ensure_registration_stream(&nats_client).await;
+    ensure_events_stream(&nats_client).await;
 
     let state = AppState::new(pool, jwt_secret, nats_client);
     let app: Router = routes::app_router(state);

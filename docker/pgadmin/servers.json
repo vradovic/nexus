@@ -10,11 +10,11 @@
       "SSLMode": "prefer"
     },
     "2": {
-      "Name": "users-db",
+      "Name": "social-db",
       "Group": "Nexus",
-      "Host": "users-db",
+      "Host": "social-db",
       "Port": 5432,
-      "MaintenanceDB": "users_db",
+      "MaintenanceDB": "social_db",
       "Username": "postgres",
       "SSLMode": "prefer"
     },

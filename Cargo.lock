@@ -1985,6 +1985,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "social-service"
+version = "0.1.0"
+dependencies = [
+ "async-nats",
+ "axum",
+ "dotenvy",
+ "futures-util",
+ "nexus-shared",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "tower-http",
+ "uuid",
+]
+
+[[package]]
 name = "socket2"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2669,22 +2686,6 @@ dependencies = [
  "idna",
  "percent-encoding",
  "serde",
-]
-
-[[package]]
-name = "users-service"
-version = "0.1.0"
-dependencies = [
- "async-nats",
- "axum",
- "dotenvy",
- "futures-util",
- "nexus-shared",
- "serde",
- "serde_json",
- "sqlx",
- "tokio",
- "uuid",
 ]
 
 [[package]]

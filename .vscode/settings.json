@@ -5,7 +5,7 @@
         "crates/auth-service/Cargo.toml",
         "crates/matchmaking-service/Cargo.toml",
         "crates/realtime-service/Cargo.toml",
-        "crates/users-service/Cargo.toml",
+        "crates/social-service/Cargo.toml",
         "crates/game-service/Cargo.toml"
     ],
     "editor.formatOnSave": true

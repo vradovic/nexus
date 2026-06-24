@@ -27,22 +27,22 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Users Service",
+            "name": "Social Service",
             "cargo": {
                 "args": [
                     "build",
                     "--package",
-                    "users-service",
+                    "social-service",
                     "--bin",
-                    "users-service"
+                    "social-service"
                 ],
                 "filter": {
-                    "name": "users-service",
+                    "name": "social-service",
                     "kind": "bin"
                 }
             },
             "args": [],
-            "cwd": "${workspaceFolder}/crates/users-service",
+            "cwd": "${workspaceFolder}/crates/social-service",
             "sourceLanguages": [
                 "rust"
             ]
@@ -129,9 +129,10 @@
             "name": "All Services",
             "configurations": [
                 "Auth Service",
-                "Users Service",
+                "Social Service",
                 "Matchmaking Service",
-                "Realtime Service"
+                "Realtime Service",
+                "Game Service"
             ],
             "stopAll": true
         },

@@ -1,8 +1,8 @@
-use async_nats::Client;
 use argon2::{
     Argon2, PasswordHasher, PasswordVerifier,
     password_hash::{PasswordHash, SaltString, rand_core::OsRng},
 };
+use async_nats::Client;
 use jsonwebtoken::{EncodingKey, Header, encode};
 use nexus_shared::{AccessTokenClaims, AppError, UserRole, publish_json};
 use serde::{Deserialize, Serialize};
@@ -61,8 +61,7 @@ pub async fn login_user(
         .parse::<UserRole>()
         .map_err(|_| AppError::internal("stored user role is invalid"))?;
 
-    let access_token =
-        create_access_token(auth_account.id, &auth_account.email, role, jwt_secret)?;
+    let access_token = create_access_token(auth_account.id, &auth_account.email, role, jwt_secret)?;
 
     Ok(LoginResponse { access_token })
 }
@@ -204,7 +203,13 @@ mod tests {
 
     #[test]
     fn accepts_valid_registration_payload() {
-        let payload = request("player@example.com", "player1", "John", "Doe", "supersecret");
+        let payload = request(
+            "player@example.com",
+            "player1",
+            "John",
+            "Doe",
+            "supersecret",
+        );
 
         let result = validate_registration(&payload);
 

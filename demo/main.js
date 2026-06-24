@@ -8,6 +8,7 @@ window.jQuery = $;
 
 const START_POSITION = "start";
 const AUTH_URL = "http://127.0.0.1:3001";
+const SOCIAL_URL = "http://127.0.0.1:3002";
 const WS_URL = "ws://127.0.0.1:3000/ws";
 const MATCHMAKING_URL = "http://127.0.0.1:3003";
 const TOKEN_STORAGE_KEY = "nexus-demo-access-token";
@@ -62,6 +63,9 @@ const positionLabel = document.querySelector("#position-label");
 const channelLabel = document.querySelector("#channel-label");
 const lastEvent = document.querySelector("#last-event");
 const moveCount = document.querySelector("#move-count");
+const opponentLabel = document.querySelector("#opponent-label");
+const sendFriendRequestButton = document.querySelector("#send-friend-request-button");
+const friendRequestStatus = document.querySelector("#friend-request-status");
 
 let board = null;
 let socket = null;
@@ -82,7 +86,9 @@ let confirmingMatchId = "";
 let activeMatch = null;
 let matchmakingPollTimer = null;
 let statusRequestInFlight = false;
+let friendRequestBusy = false;
 const confirmedMatchIds = new Set();
+const sentFriendRequestRecipientIds = new Set();
 
 if (authProfile?.email) {
   loginEmailInput.value = authProfile.email;
@@ -151,6 +157,14 @@ resetButton.addEventListener("click", () => {
 
 flipButton.addEventListener("click", () => {
   board?.flip();
+});
+
+sendFriendRequestButton.addEventListener("click", () => {
+  sendFriendRequestToOpponent().catch((error) => {
+    friendRequestBusy = false;
+    renderGameSocialState();
+    friendRequestStatus.textContent = error.message || "Failed to send friend request.";
+  });
 });
 
 window.addEventListener("resize", () => {
@@ -247,6 +261,38 @@ async function matchmakingRequest(path, options = {}) {
   }
 
   const response = await fetch(`${MATCHMAKING_URL}/${path}`, {
+    method,
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+
+  if (response.status === 401) {
+    logout();
+    throw new Error("Session expired. Sign in again.");
+  }
+
+  if (!response.ok) {
+    throw new Error(await errorMessage(response));
+  }
+
+  if (response.status === 204) {
+    return null;
+  }
+
+  return response.json();
+}
+
+async function socialRequest(path, options = {}) {
+  const { body, method = "GET" } = options;
+  const headers = {
+    authorization: `Bearer ${authToken}`,
+  };
+
+  if (body !== undefined) {
+    headers["content-type"] = "application/json";
+  }
+
+  const response = await fetch(`${SOCIAL_URL}/${path}`, {
     method,
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -778,6 +824,7 @@ async function enterGameChannel(payload) {
 
   resetBoardState();
   channelLabel.textContent = nextMatch.channel;
+  renderGameSocialState();
   showPage("game");
   await initializeBoard();
   board?.resize();
@@ -847,7 +894,65 @@ function resetBoardState() {
   lastEvent.textContent = "none";
   moveCount.textContent = "0";
   logList.replaceChildren();
+  renderGameSocialState();
   setBoardPosition(START_POSITION, false);
+}
+
+async function sendFriendRequestToOpponent() {
+  const recipientId = opponentId();
+  if (!recipientId || friendRequestBusy || sentFriendRequestRecipientIds.has(recipientId)) {
+    return;
+  }
+
+  friendRequestBusy = true;
+  renderGameSocialState();
+  friendRequestStatus.textContent = "Sending";
+
+  try {
+    await socialRequest("friend-requests", {
+      method: "POST",
+      body: { recipient_id: recipientId },
+    });
+    sentFriendRequestRecipientIds.add(recipientId);
+    friendRequestStatus.textContent = "Friend request sent";
+  } finally {
+    friendRequestBusy = false;
+    renderGameSocialState();
+  }
+}
+
+function renderGameSocialState() {
+  if (!opponentLabel || !sendFriendRequestButton || !friendRequestStatus) {
+    return;
+  }
+
+  const recipientId = opponentId();
+  opponentLabel.textContent = recipientId ? shortId(recipientId) : "none";
+
+  if (!recipientId) {
+    sendFriendRequestButton.disabled = true;
+    friendRequestStatus.textContent = "";
+    return;
+  }
+
+  if (sentFriendRequestRecipientIds.has(recipientId)) {
+    sendFriendRequestButton.disabled = true;
+    friendRequestStatus.textContent ||= "Friend request sent";
+    return;
+  }
+
+  sendFriendRequestButton.disabled = friendRequestBusy;
+  if (!friendRequestBusy) {
+    friendRequestStatus.textContent = "";
+  }
+}
+
+function opponentId() {
+  if (!activeMatch?.playerIds?.length || !clientId) {
+    return "";
+  }
+
+  return activeMatch.playerIds.find((playerId) => playerId !== clientId) || "";
 }
 
 function setBoardPosition(position, animate) {
