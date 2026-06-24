@@ -25,6 +25,7 @@ const MATCHMAKING_QUEUES = {
 const loginPage = document.querySelector("#login-page");
 const registerPage = document.querySelector("#register-page");
 const lobbyPage = document.querySelector("#lobby-page");
+const friendsPage = document.querySelector("#friends-page");
 const gamePage = document.querySelector("#game-page");
 
 const loginForm = document.querySelector("#login-form");
@@ -47,6 +48,13 @@ const clientLabels = document.querySelectorAll("[data-client-label]");
 const clientColors = document.querySelectorAll("[data-client-color]");
 const statusDots = document.querySelectorAll("[data-status-dot]");
 const statusTexts = document.querySelectorAll("[data-status-text]");
+const showFriendsButton = document.querySelector("#show-friends-button");
+const showLobbyButton = document.querySelector("#show-lobby-button");
+const refreshFriendsButton = document.querySelector("#refresh-friends-button");
+const friendsStatus = document.querySelector("#friends-status");
+const friendsList = document.querySelector("#friends-list");
+const incomingFriendRequestsList = document.querySelector("#incoming-friend-requests");
+const outgoingFriendRequestsList = document.querySelector("#outgoing-friend-requests");
 
 const queueButtons = document.querySelectorAll("[data-ticket-key]");
 const queueStatus = document.querySelector("#queue-status");
@@ -87,6 +95,7 @@ let activeMatch = null;
 let matchmakingPollTimer = null;
 let statusRequestInFlight = false;
 let friendRequestBusy = false;
+let friendsRequestInFlight = false;
 const confirmedMatchIds = new Set();
 const sentFriendRequestRecipientIds = new Set();
 
@@ -143,6 +152,37 @@ leaveQueueButton.addEventListener("click", () => {
     renderLobbyState();
     queueStatus.textContent = error.message || "Failed to leave queue.";
   });
+});
+
+showFriendsButton.addEventListener("click", () => {
+  openFriendsPage().catch((error) => {
+    friendsStatus.textContent = error.message || "Failed to load friends.";
+  });
+});
+
+showLobbyButton.addEventListener("click", () => {
+  showPage("lobby");
+  refreshMatchmakingStatus().catch((error) => {
+    queueStatus.textContent = error.message || "Failed to refresh matchmaking.";
+  });
+  startMatchmakingPolling();
+});
+
+refreshFriendsButton.addEventListener("click", () => {
+  loadFriendsPage().catch((error) => {
+    friendsStatus.textContent = error.message || "Failed to load friends.";
+  });
+});
+
+incomingFriendRequestsList.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-friend-request-action]");
+  if (!button) return;
+
+  handleFriendRequestAction(button.dataset.friendRequestAction, button.dataset.requestId).catch(
+    (error) => {
+      friendsStatus.textContent = error.message || "Failed to update friend request.";
+    },
+  );
 });
 
 resetButton.addEventListener("click", () => {
@@ -390,6 +430,7 @@ function showPage(page) {
   loginPage.classList.toggle("hidden", page !== "login");
   registerPage.classList.toggle("hidden", page !== "register");
   lobbyPage.classList.toggle("hidden", page !== "lobby");
+  friendsPage.classList.toggle("hidden", page !== "friends");
   gamePage.classList.toggle("hidden", page !== "game");
 
   if (page === "game") {
@@ -495,6 +536,93 @@ async function refreshMatchmakingStatus() {
   }
 }
 
+async function openFriendsPage() {
+  stopMatchmakingPolling();
+  showPage("friends");
+  await loadFriendsPage();
+}
+
+async function loadFriendsPage() {
+  if (friendsRequestInFlight) {
+    return;
+  }
+
+  friendsRequestInFlight = true;
+  friendsStatus.textContent = "Loading";
+
+  try {
+    const [friends, requests] = await Promise.all([
+      socialRequest("friends"),
+      socialRequest("friend-requests"),
+    ]);
+    renderFriendsPage(friends || [], requests || { incoming: [], outgoing: [] });
+    friendsStatus.textContent = "Ready";
+  } finally {
+    friendsRequestInFlight = false;
+  }
+}
+
+async function handleFriendRequestAction(action, requestId) {
+  if (!requestId || (action !== "accept" && action !== "decline")) {
+    return;
+  }
+
+  friendsStatus.textContent = "Updating";
+  await socialRequest(`friend-requests/${requestId}/${action}`, { method: "POST" });
+  await loadFriendsPage();
+}
+
+function renderFriendsPage(friends, requests) {
+  sentFriendRequestRecipientIds.clear();
+  for (const request of requests.outgoing || []) {
+    sentFriendRequestRecipientIds.add(request.recipient_id);
+  }
+
+  friendsList.replaceChildren(
+    ...listItemsOrEmpty(
+      friends,
+      (friend) => socialListItem(profileName(friend.first_name, friend.last_name, friend.friend_id)),
+      "No friends yet",
+    ),
+  );
+
+  incomingFriendRequestsList.replaceChildren(
+    ...listItemsOrEmpty(
+      requests.incoming || [],
+      (request) =>
+        socialRequestItem({
+          label: profileName(
+            request.requester_first_name,
+            request.requester_last_name,
+            request.requester_id,
+          ),
+          requestId: request.id,
+          actions: true,
+        }),
+      "No incoming requests",
+    ),
+  );
+
+  outgoingFriendRequestsList.replaceChildren(
+    ...listItemsOrEmpty(
+      requests.outgoing || [],
+      (request) =>
+        socialRequestItem({
+          label: profileName(
+            request.recipient_first_name,
+            request.recipient_last_name,
+            request.recipient_id,
+          ),
+          requestId: request.id,
+          actions: false,
+        }),
+      "No sent requests",
+    ),
+  );
+
+  renderGameSocialState();
+}
+
 async function confirmPendingMatch(match) {
   if (
     confirmingMatchId === match.id ||
@@ -581,6 +709,56 @@ function formatQueueName(ticketKey) {
 
 function shortId(id) {
   return id ? id.slice(0, 8) : "none";
+}
+
+function profileName(firstName, lastName, fallbackId) {
+  const name = [firstName, lastName].filter(Boolean).join(" ").trim();
+  return name || shortId(fallbackId);
+}
+
+function listItemsOrEmpty(items, renderItem, emptyText) {
+  if (!items.length) {
+    const emptyItem = document.createElement("li");
+    emptyItem.className = "empty";
+    emptyItem.textContent = emptyText;
+    return [emptyItem];
+  }
+
+  return items.map(renderItem);
+}
+
+function socialListItem(label) {
+  const item = document.createElement("li");
+  const name = document.createElement("span");
+  name.textContent = label;
+  item.append(name);
+  return item;
+}
+
+function socialRequestItem({ label, requestId, actions }) {
+  const item = socialListItem(label);
+  if (!actions) {
+    return item;
+  }
+
+  const actionGroup = document.createElement("div");
+  actionGroup.className = "social-list-actions";
+
+  const acceptButton = document.createElement("button");
+  acceptButton.type = "button";
+  acceptButton.dataset.friendRequestAction = "accept";
+  acceptButton.dataset.requestId = requestId;
+  acceptButton.textContent = "Accept";
+
+  const declineButton = document.createElement("button");
+  declineButton.type = "button";
+  declineButton.dataset.friendRequestAction = "decline";
+  declineButton.dataset.requestId = requestId;
+  declineButton.textContent = "Decline";
+
+  actionGroup.append(acceptButton, declineButton);
+  item.append(actionGroup);
+  return item;
 }
 
 function secondsUntil(unixSeconds) {

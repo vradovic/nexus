@@ -85,6 +85,7 @@
         </div>
 
         <div class="toolbar-actions">
+          <button id="show-friends-button" type="button">Friends</button>
           <button data-logout-button type="button">Logout</button>
           <div class="status" aria-live="polite">
             <span class="status-dot" data-status-dot></span>
@@ -130,6 +131,56 @@
 
           <div class="lobby-actions">
             <button id="leave-queue-button" type="button" disabled>Leave queue</button>
+          </div>
+        </section>
+      </main>
+    </section>
+
+    <section id="friends-page" class="shell hidden">
+      <header class="toolbar">
+        <div class="identity">
+          <span class="swatch" data-client-color aria-hidden="true"></span>
+          <div>
+            <h1>Nexus Chess</h1>
+            <p data-client-label></p>
+          </div>
+        </div>
+
+        <div class="toolbar-actions">
+          <button id="show-lobby-button" type="button">Lobby</button>
+          <button id="refresh-friends-button" type="button">Refresh</button>
+          <button data-logout-button type="button">Logout</button>
+          <div class="status" aria-live="polite">
+            <span class="status-dot" data-status-dot></span>
+            <span data-status-text>Disconnected</span>
+          </div>
+        </div>
+      </header>
+
+      <main class="friends-stage">
+        <section class="friends-panel" aria-label="Friends">
+          <div class="lobby-header">
+            <div>
+              <h2>Friends</h2>
+              <p id="friends-status" aria-live="polite">Ready</p>
+            </div>
+          </div>
+
+          <div class="social-grid">
+            <section>
+              <h2>Friends</h2>
+              <ol id="friends-list" class="social-list"></ol>
+            </section>
+
+            <section>
+              <h2>Requests</h2>
+              <ol id="incoming-friend-requests" class="social-list"></ol>
+            </section>
+
+            <section>
+              <h2>Sent</h2>
+              <ol id="outgoing-friend-requests" class="social-list"></ol>
+            </section>
           </div>
         </section>
       </main>

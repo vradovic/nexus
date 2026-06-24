@@ -10,12 +10,22 @@ use tower_http::cors::CorsLayer;
 use uuid::Uuid;
 
 use crate::app_state::AppState;
-use crate::models::{FriendRequest, SendFriendRequest, UserProfile};
+use crate::models::{
+    Friend, FriendRequest, FriendRequestsResponse, SendFriendRequest, UserProfile,
+};
 use crate::service;
 
 pub fn app_router(state: AppState) -> Router {
     let authenticated_routes = Router::new()
-        .route("/friend-requests", post(send_friend_request))
+        .route("/friends", get(list_friends))
+        .route(
+            "/friend-requests",
+            get(list_friend_requests).post(send_friend_request),
+        )
+        .route(
+            "/friend-requests/{request_id}/accept",
+            post(accept_friend_request),
+        )
         .route(
             "/friend-requests/{request_id}/decline",
             post(decline_friend_request),
@@ -57,6 +67,37 @@ async fn send_friend_request(
         payload.recipient_id,
     )
     .await?;
+
+    Ok(Json(request))
+}
+
+async fn list_friends(
+    State(state): State<AppState>,
+    Extension(user): Extension<AuthenticatedUser>,
+) -> Result<Json<Vec<Friend>>, AppError> {
+    let friends = service::list_friends(&state.user_profile_repository, user.user_id).await?;
+
+    Ok(Json(friends))
+}
+
+async fn list_friend_requests(
+    State(state): State<AppState>,
+    Extension(user): Extension<AuthenticatedUser>,
+) -> Result<Json<FriendRequestsResponse>, AppError> {
+    let requests =
+        service::list_friend_requests(&state.user_profile_repository, user.user_id).await?;
+
+    Ok(Json(requests))
+}
+
+async fn accept_friend_request(
+    State(state): State<AppState>,
+    Extension(user): Extension<AuthenticatedUser>,
+    Path(request_id): Path<Uuid>,
+) -> Result<Json<FriendRequest>, AppError> {
+    let request =
+        service::accept_friend_request(&state.user_profile_repository, user.user_id, request_id)
+            .await?;
 
     Ok(Json(request))
 }
