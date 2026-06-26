@@ -12,7 +12,7 @@ use crate::{
     app_state::AppState,
     models::{
         CreateMatchmakingRuleRequest, JoinMatchmakingRequest, MatchmakingRule, MatchmakingTicket,
-        PendingMatch,
+        PendingMatch, UpdateMatchmakingRulesRequest,
     },
     repository::MatchmakingRuleRepository,
     store::MatchmakingStore,
@@ -207,6 +207,31 @@ pub async fn create_matchmaking_rule(
 
     matchmaking_rule_repository
         .create_rule(ticket_key, payload.required_players)
+        .await
+}
+
+pub async fn list_matchmaking_rules(
+    matchmaking_rule_repository: &MatchmakingRuleRepository,
+) -> Result<Vec<MatchmakingRule>, AppError> {
+    matchmaking_rule_repository.find_all_rules().await
+}
+
+pub async fn list_enabled_matchmaking_rules(
+    matchmaking_rule_repository: &MatchmakingRuleRepository,
+) -> Result<Vec<MatchmakingRule>, AppError> {
+    matchmaking_rule_repository.find_enabled_rules().await
+}
+
+pub async fn update_matchmaking_rules_enabled(
+    matchmaking_rule_repository: &MatchmakingRuleRepository,
+    payload: UpdateMatchmakingRulesRequest,
+) -> Result<Vec<MatchmakingRule>, AppError> {
+    if payload.rules.is_empty() {
+        return matchmaking_rule_repository.find_all_rules().await;
+    }
+
+    matchmaking_rule_repository
+        .update_rules_enabled(&payload.rules)
         .await
 }
 

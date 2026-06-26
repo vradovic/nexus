@@ -104,12 +104,7 @@
             </div>
           </div>
 
-          <div class="queue-list">
-            <button class="queue-card" data-ticket-key="duel" type="button">
-              <span>Duel</span>
-              <small>2 players</small>
-            </button>
-          </div>
+          <div id="queue-list" class="queue-list"></div>
 
           <dl class="lobby-state">
             <div>
@@ -243,6 +238,16 @@
             >
               Chat log
             </button>
+            <button
+              id="admin-matchmaking-rules-tab"
+              data-admin-tab="matchmaking-rules"
+              type="button"
+              role="tab"
+              aria-controls="admin-matchmaking-rules-panel"
+              aria-selected="false"
+            >
+              Matchmaking rules
+            </button>
           </div>
 
           <section
@@ -269,6 +274,34 @@
             aria-labelledby="admin-chats-tab"
           >
             <ol id="admin-chat-log-list" class="social-list"></ol>
+          </section>
+
+          <section
+            id="admin-matchmaking-rules-panel"
+            class="admin-tab-panel hidden"
+            data-admin-tab-panel="matchmaking-rules"
+            role="tabpanel"
+            aria-labelledby="admin-matchmaking-rules-tab"
+          >
+            <form id="admin-create-matchmaking-rule-form" class="admin-form admin-rule-form">
+              <label>
+                Ticket key
+                <input id="admin-rule-ticket-key" type="text" autocomplete="off" required />
+              </label>
+              <label>
+                Required players
+                <input id="admin-rule-required-players" type="number" min="2" step="1" required />
+              </label>
+              <button id="admin-create-matchmaking-rule-button" type="submit" disabled>
+                Create matchmaking rule
+              </button>
+            </form>
+            <div class="admin-actions">
+              <button id="admin-save-matchmaking-rules-button" type="button" disabled>
+                Submit changes
+              </button>
+            </div>
+            <ol id="admin-matchmaking-rules-list" class="social-list"></ol>
           </section>
         </section>
       </main>

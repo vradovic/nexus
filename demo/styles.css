@@ -56,6 +56,11 @@ input {
   color: #1c222b;
 }
 
+input[type="checkbox"] {
+  width: auto;
+  height: auto;
+}
+
 .shell {
   min-height: 100vh;
   display: grid;
@@ -307,6 +312,15 @@ h2 {
   color: #66717f;
 }
 
+.queue-empty {
+  padding: 12px;
+  border: 1px solid #e1e6ee;
+  border-radius: 6px;
+  background: #fbfcfe;
+  color: #758091;
+  font-size: 13px;
+}
+
 .lobby-state {
   padding-top: 4px;
 }
@@ -380,6 +394,25 @@ h2 {
   gap: 4px;
   font-size: 12px;
   color: #5f6978;
+}
+
+.admin-rule-form {
+  width: min(100%, 640px);
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) 140px auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.admin-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.matchmaking-rule-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .social-grid {
@@ -595,6 +628,10 @@ dd {
   }
 
   .social-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-rule-form {
     grid-template-columns: 1fr;
   }
 

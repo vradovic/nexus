@@ -3,7 +3,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     middleware,
-    routing::{get, post},
+    routing::{get, patch, post},
 };
 use nexus_shared::{AppError, AuthenticatedUser};
 use tower_http::cors::CorsLayer;
@@ -13,7 +13,7 @@ use crate::{
     middleware::{require_admin_role, require_player_role},
     models::{
         CreateMatchmakingRuleRequest, JoinMatchmakingRequest, MatchmakingRule,
-        MatchmakingStatusResponse, MatchmakingTicket,
+        MatchmakingStatusResponse, MatchmakingTicket, UpdateMatchmakingRulesRequest,
     },
     service,
 };
@@ -31,7 +31,14 @@ pub fn app_router(state: AppState) -> Router {
         ));
 
     let admin_routes = Router::new()
-        .route("/admin/matchmaking/rules", post(create_matchmaking_rule))
+        .route(
+            "/admin/matchmaking/rules",
+            get(list_matchmaking_rules).post(create_matchmaking_rule),
+        )
+        .route(
+            "/admin/matchmaking/rules/enabled",
+            patch(update_matchmaking_rules_enabled),
+        )
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             require_admin_role,
@@ -39,6 +46,7 @@ pub fn app_router(state: AppState) -> Router {
 
     Router::new()
         .route("/health", get(health))
+        .route("/matchmaking/rules", get(list_enabled_matchmaking_rules))
         .merge(player_routes)
         .merge(admin_routes)
         .layer(CorsLayer::permissive())
@@ -76,6 +84,14 @@ async fn get_matchmaking_status(
         ticket,
         pending_match,
     }))
+}
+
+async fn list_enabled_matchmaking_rules(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<MatchmakingRule>>, AppError> {
+    let rules = service::list_enabled_matchmaking_rules(&state.matchmaking_rule_repository).await?;
+
+    Ok(Json(rules))
 }
 
 async fn leave_matchmaking(
@@ -127,4 +143,23 @@ async fn create_matchmaking_rule(
         service::create_matchmaking_rule(&state.matchmaking_rule_repository, payload).await?;
 
     Ok((StatusCode::CREATED, Json(rule)))
+}
+
+async fn list_matchmaking_rules(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<MatchmakingRule>>, AppError> {
+    let rules = service::list_matchmaking_rules(&state.matchmaking_rule_repository).await?;
+
+    Ok(Json(rules))
+}
+
+async fn update_matchmaking_rules_enabled(
+    State(state): State<AppState>,
+    Json(payload): Json<UpdateMatchmakingRulesRequest>,
+) -> Result<Json<Vec<MatchmakingRule>>, AppError> {
+    let rules =
+        service::update_matchmaking_rules_enabled(&state.matchmaking_rule_repository, payload)
+            .await?;
+
+    Ok(Json(rules))
 }

@@ -24,6 +24,7 @@ pub struct MatchmakingRule {
     pub id: Uuid,
     pub ticket_key: String,
     pub required_players: i32,
+    pub enabled: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -35,6 +36,17 @@ pub struct JoinMatchmakingRequest {
 pub struct CreateMatchmakingRuleRequest {
     pub ticket_key: String,
     pub required_players: i32,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateMatchmakingRulesRequest {
+    pub rules: Vec<UpdateMatchmakingRuleEnabled>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateMatchmakingRuleEnabled {
+    pub id: Uuid,
+    pub enabled: bool,
 }
 
 #[derive(Debug, Serialize)]

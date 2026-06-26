@@ -16,12 +16,6 @@ const TOKEN_STORAGE_KEY = "nexus-demo-access-token";
 const PROFILE_STORAGE_KEY = "nexus-demo-profile";
 const PIECE_THEME_URL = "https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png";
 const MATCHMAKING_POLL_INTERVAL_MS = 1500;
-const MATCHMAKING_QUEUES = {
-  duel: {
-    label: "Duel",
-    requiredPlayers: 2,
-  },
-};
 
 const loginPage = document.querySelector("#login-page");
 const registerPage = document.querySelector("#register-page");
@@ -65,8 +59,18 @@ const adminTabPanels = document.querySelectorAll("[data-admin-tab-panel]");
 const adminUserSearchInput = document.querySelector("#admin-user-search");
 const adminUsersList = document.querySelector("#admin-users-list");
 const adminChatLogList = document.querySelector("#admin-chat-log-list");
+const adminCreateMatchmakingRuleForm = document.querySelector("#admin-create-matchmaking-rule-form");
+const adminRuleTicketKeyInput = document.querySelector("#admin-rule-ticket-key");
+const adminRuleRequiredPlayersInput = document.querySelector("#admin-rule-required-players");
+const adminCreateMatchmakingRuleButton = document.querySelector(
+  "#admin-create-matchmaking-rule-button",
+);
+const adminMatchmakingRulesList = document.querySelector("#admin-matchmaking-rules-list");
+const adminSaveMatchmakingRulesButton = document.querySelector(
+  "#admin-save-matchmaking-rules-button",
+);
 
-const queueButtons = document.querySelectorAll("[data-ticket-key]");
+const queueList = document.querySelector("#queue-list");
 const queueStatus = document.querySelector("#queue-status");
 const queueLabel = document.querySelector("#queue-label");
 const ticketLabel = document.querySelector("#ticket-label");
@@ -109,6 +113,8 @@ let awaitingChannelMatchId = "";
 let awaitingChannelTicketKey = "";
 let confirmingMatchId = "";
 let activeMatch = null;
+let lobbyMatchmakingRules = [];
+let lobbyRulesRequestInFlight = false;
 let matchmakingPollTimer = null;
 let statusRequestInFlight = false;
 let friendRequestBusy = false;
@@ -120,6 +126,10 @@ let adminUsersRequestInFlight = false;
 let adminActiveUsers = [];
 let adminChatLogRequestInFlight = false;
 let adminChatLogMessages = [];
+let adminMatchmakingRulesRequestInFlight = false;
+let adminMatchmakingRules = [];
+let adminCreateMatchmakingRuleInFlight = false;
+const adminMatchmakingRuleChanges = new Map();
 const confirmedMatchIds = new Set();
 const sentFriendRequestRecipientIds = new Set();
 const blockedUserIds = new Set();
@@ -164,12 +174,13 @@ logoutButtons.forEach((button) => {
   });
 });
 
-queueButtons.forEach((button) => {
-  button.addEventListener("click", () => {
-    joinQueue(button.dataset.ticketKey).catch((error) => {
-      renderLobbyState();
-      queueStatus.textContent = error.message || "Failed to join queue.";
-    });
+queueList.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-ticket-key]");
+  if (!button) return;
+
+  joinQueue(button.dataset.ticketKey).catch((error) => {
+    renderLobbyState();
+    queueStatus.textContent = error.message || "Failed to join queue.";
   });
 });
 
@@ -188,6 +199,9 @@ showFriendsButton.addEventListener("click", () => {
 
 showLobbyButton.addEventListener("click", () => {
   showPage("lobby");
+  loadLobbyMatchmakingRules().catch((error) => {
+    queueStatus.textContent = error.message || "Failed to load matchmaking rules.";
+  });
   refreshMatchmakingStatus().catch((error) => {
     queueStatus.textContent = error.message || "Failed to refresh matchmaking.";
   });
@@ -196,6 +210,9 @@ showLobbyButton.addEventListener("click", () => {
 
 showAdminLobbyButton.addEventListener("click", () => {
   showPage("lobby");
+  loadLobbyMatchmakingRules().catch((error) => {
+    queueStatus.textContent = error.message || "Failed to load matchmaking rules.";
+  });
   refreshMatchmakingStatus().catch((error) => {
     queueStatus.textContent = error.message || "Failed to refresh matchmaking.";
   });
@@ -220,6 +237,34 @@ adminTabButtons.forEach((button) => {
 
 adminUserSearchInput.addEventListener("input", () => {
   renderAdminUsers();
+});
+
+adminCreateMatchmakingRuleForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  createAdminMatchmakingRule().catch((error) => {
+    renderAdminTabError(error.message || "Failed to create matchmaking rule.");
+  });
+});
+
+adminRuleTicketKeyInput.addEventListener("input", () => {
+  renderAdminMatchmakingRulesActions();
+});
+
+adminRuleRequiredPlayersInput.addEventListener("input", () => {
+  renderAdminMatchmakingRulesActions();
+});
+
+adminMatchmakingRulesList.addEventListener("change", (event) => {
+  const checkbox = event.target.closest("input[data-matchmaking-rule-id]");
+  if (!checkbox) return;
+
+  handleAdminMatchmakingRuleToggle(checkbox);
+});
+
+adminSaveMatchmakingRulesButton.addEventListener("click", () => {
+  saveAdminMatchmakingRuleChanges().catch((error) => {
+    renderAdminTabError(error.message || "Failed to update matchmaking rules.");
+  });
 });
 
 refreshFriendsButton.addEventListener("click", () => {
@@ -352,6 +397,9 @@ async function startLobbySession() {
   channelLabel.textContent = "none";
   showPage("lobby");
   ensureWebSocketConnected();
+  await loadLobbyMatchmakingRules().catch((error) => {
+    queueStatus.textContent = error.message || "Failed to load matchmaking rules.";
+  });
   await refreshBlockedUsers().catch(() => {});
   await refreshMatchmakingStatus().catch((error) => {
     queueStatus.textContent = error.message || "Failed to refresh matchmaking.";
@@ -403,6 +451,22 @@ async function matchmakingRequest(path, options = {}) {
   }
 
   return response.json();
+}
+
+async function loadLobbyMatchmakingRules() {
+  if (lobbyRulesRequestInFlight) {
+    return;
+  }
+
+  lobbyRulesRequestInFlight = true;
+
+  try {
+    lobbyMatchmakingRules = await matchmakingRequest("matchmaking/rules");
+    renderLobbyQueues();
+    renderLobbyState();
+  } finally {
+    lobbyRulesRequestInFlight = false;
+  }
 }
 
 async function socialRequest(path, options = {}) {
@@ -679,6 +743,8 @@ async function openAdminPage() {
     await loadAdminActiveUsers();
   } else if (adminActiveTab === "chats") {
     await loadAdminChatLog();
+  } else if (adminActiveTab === "matchmaking-rules") {
+    await loadAdminMatchmakingRules();
   }
 }
 
@@ -688,11 +754,13 @@ async function handleAdminTabClick(tab) {
     await loadAdminActiveUsers();
   } else if (tab === "chats") {
     await loadAdminChatLog();
+  } else if (tab === "matchmaking-rules") {
+    await loadAdminMatchmakingRules();
   }
 }
 
 function showAdminTab(tab) {
-  if (tab !== "users" && tab !== "chats") {
+  if (tab !== "users" && tab !== "chats" && tab !== "matchmaking-rules") {
     return;
   }
 
@@ -780,6 +848,139 @@ function adminChatLogItem(message) {
   return item;
 }
 
+async function loadAdminMatchmakingRules(options = {}) {
+  if (adminMatchmakingRulesRequestInFlight && !options.force) {
+    return;
+  }
+
+  adminMatchmakingRulesRequestInFlight = true;
+  showAdminMatchmakingRulesMessage("Loading matchmaking rules");
+
+  try {
+    adminMatchmakingRules = await matchmakingRequest("admin/matchmaking/rules");
+    adminMatchmakingRuleChanges.clear();
+    renderAdminMatchmakingRules();
+  } finally {
+    adminMatchmakingRulesRequestInFlight = false;
+    renderAdminMatchmakingRulesActions();
+  }
+}
+
+function renderAdminMatchmakingRules() {
+  adminMatchmakingRulesList.replaceChildren(
+    ...listItemsOrEmpty(
+      adminMatchmakingRules,
+      (rule) => adminMatchmakingRuleItem(rule),
+      "No matchmaking rules",
+    ),
+  );
+  renderAdminMatchmakingRulesActions();
+}
+
+function adminMatchmakingRuleItem(rule) {
+  const item = document.createElement("li");
+  const label = document.createElement("label");
+  const checkbox = document.createElement("input");
+  const name = document.createElement("strong");
+  const meta = document.createElement("span");
+
+  label.className = "matchmaking-rule-toggle";
+  checkbox.type = "checkbox";
+  checkbox.checked = rule.enabled;
+  checkbox.dataset.matchmakingRuleId = rule.id;
+  checkbox.dataset.originalEnabled = rule.enabled ? "true" : "false";
+  name.textContent = rule.ticket_key;
+  meta.textContent = `${rule.required_players} players | ${rule.id}`;
+
+  label.append(checkbox, name);
+  item.append(label, meta);
+  return item;
+}
+
+async function createAdminMatchmakingRule() {
+  const ticketKey = adminRuleTicketKeyInput.value.trim();
+  const requiredPlayers = Number.parseInt(adminRuleRequiredPlayersInput.value, 10);
+
+  if (!ticketKey || !Number.isInteger(requiredPlayers) || requiredPlayers < 2) {
+    return;
+  }
+
+  adminCreateMatchmakingRuleInFlight = true;
+  renderAdminMatchmakingRulesActions();
+
+  try {
+    await matchmakingRequest("admin/matchmaking/rules", {
+      method: "POST",
+      body: {
+        ticket_key: ticketKey,
+        required_players: requiredPlayers,
+      },
+    });
+    adminRuleTicketKeyInput.value = "";
+    adminRuleRequiredPlayersInput.value = "";
+    await loadAdminMatchmakingRules({ force: true });
+    await loadLobbyMatchmakingRules();
+  } finally {
+    adminCreateMatchmakingRuleInFlight = false;
+    renderAdminMatchmakingRulesActions();
+  }
+}
+
+function handleAdminMatchmakingRuleToggle(checkbox) {
+  const ruleId = checkbox.dataset.matchmakingRuleId;
+  const originalEnabled = checkbox.dataset.originalEnabled === "true";
+
+  if (checkbox.checked === originalEnabled) {
+    adminMatchmakingRuleChanges.delete(ruleId);
+  } else {
+    adminMatchmakingRuleChanges.set(ruleId, checkbox.checked);
+  }
+
+  renderAdminMatchmakingRulesActions();
+}
+
+async function saveAdminMatchmakingRuleChanges() {
+  if (adminMatchmakingRulesRequestInFlight || adminMatchmakingRuleChanges.size === 0) {
+    return;
+  }
+
+  adminMatchmakingRulesRequestInFlight = true;
+  renderAdminMatchmakingRulesActions();
+
+  try {
+    adminMatchmakingRules = await matchmakingRequest("admin/matchmaking/rules/enabled", {
+      method: "PATCH",
+      body: {
+        rules: Array.from(adminMatchmakingRuleChanges, ([id, enabled]) => ({
+          id,
+          enabled,
+        })),
+      },
+    });
+    adminMatchmakingRuleChanges.clear();
+    renderAdminMatchmakingRules();
+    await loadLobbyMatchmakingRules();
+  } finally {
+    adminMatchmakingRulesRequestInFlight = false;
+    renderAdminMatchmakingRulesActions();
+  }
+}
+
+function renderAdminMatchmakingRulesActions() {
+  const ticketKey = adminRuleTicketKeyInput.value.trim();
+  const requiredPlayers = Number.parseInt(adminRuleRequiredPlayersInput.value, 10);
+
+  adminCreateMatchmakingRuleButton.disabled =
+    adminCreateMatchmakingRuleInFlight ||
+    adminMatchmakingRulesRequestInFlight ||
+    !ticketKey ||
+    !Number.isInteger(requiredPlayers) ||
+    requiredPlayers < 2;
+
+  adminSaveMatchmakingRulesButton.disabled =
+    adminMatchmakingRulesRequestInFlight || adminMatchmakingRuleChanges.size === 0;
+}
+
 function adminUserItem(user) {
   const item = document.createElement("li");
   const name = document.createElement("strong");
@@ -806,9 +1007,19 @@ function showAdminChatLogMessage(message) {
   adminChatLogList.replaceChildren(item);
 }
 
+function showAdminMatchmakingRulesMessage(message) {
+  const item = document.createElement("li");
+  item.className = "empty";
+  item.textContent = message;
+  adminMatchmakingRulesList.replaceChildren(item);
+  renderAdminMatchmakingRulesActions();
+}
+
 function renderAdminTabError(message) {
   if (adminActiveTab === "chats") {
     showAdminChatLogMessage(message);
+  } else if (adminActiveTab === "matchmaking-rules") {
+    showAdminMatchmakingRulesMessage(message);
   } else {
     showAdminUsersMessage(message);
   }
@@ -1001,7 +1212,7 @@ function renderLobbyState() {
     queueStatus.textContent = "Select a queue";
   }
 
-  queueButtons.forEach((button) => {
+  queueList.querySelectorAll("[data-ticket-key]").forEach((button) => {
     const isActive = button.dataset.ticketKey === activeQueueKey;
     button.classList.toggle("active", isActive);
     button.disabled = queueBusy || hasQueueState;
@@ -1011,8 +1222,35 @@ function renderLobbyState() {
     queueBusy || !queuedTicket || Boolean(pendingMatch || awaitingChannelMatchId);
 }
 
+function renderLobbyQueues() {
+  if (!lobbyMatchmakingRules.length) {
+    const empty = document.createElement("p");
+    empty.className = "queue-empty";
+    empty.textContent = "No enabled matchmaking rules";
+    queueList.replaceChildren(empty);
+    return;
+  }
+
+  queueList.replaceChildren(...lobbyMatchmakingRules.map((rule) => lobbyQueueButton(rule)));
+}
+
+function lobbyQueueButton(rule) {
+  const button = document.createElement("button");
+  const name = document.createElement("span");
+  const details = document.createElement("small");
+
+  button.className = "queue-card";
+  button.type = "button";
+  button.dataset.ticketKey = rule.ticket_key;
+  name.textContent = formatQueueName(rule.ticket_key);
+  details.textContent = `${rule.required_players} players`;
+
+  button.append(name, details);
+  return button;
+}
+
 function formatQueueName(ticketKey) {
-  return MATCHMAKING_QUEUES[ticketKey]?.label || ticketKey;
+  return ticketKey;
 }
 
 function shortId(id) {
