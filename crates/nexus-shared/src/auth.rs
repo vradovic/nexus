@@ -55,10 +55,7 @@ pub struct AccessTokenClaims {
     pub exp: usize,
 }
 
-pub fn decode_access_token(
-    token: &str,
-    jwt_secret: &str,
-) -> Result<AccessTokenClaims, AppError> {
+pub fn decode_access_token(token: &str, jwt_secret: &str) -> Result<AccessTokenClaims, AppError> {
     decode::<AccessTokenClaims>(
         token,
         &DecodingKey::from_secret(jwt_secret.as_bytes()),

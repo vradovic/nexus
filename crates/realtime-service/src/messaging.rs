@@ -22,6 +22,8 @@ pub struct MessageRouter {
 pub enum MessagingError {
     #[error("connection {conn_id} not found")]
     ConnectionNotFound { conn_id: ConnectionId },
+    #[error("connection {conn_id} already exists")]
+    ConnectionAlreadyExists { conn_id: ConnectionId },
     #[error("channel {channel_id} not found")]
     ChannelNotFound { channel_id: ChannelId },
     #[error("default channel cannot be removed")]
@@ -34,6 +36,10 @@ impl MessageRouter {
         conn_id: ConnectionId,
         tx: Sender,
     ) -> Result<(), MessagingError> {
+        if self.connections.contains_key(&conn_id) {
+            return Err(MessagingError::ConnectionAlreadyExists { conn_id });
+        }
+
         self.connections.insert(conn_id, tx);
         if let Err(error) = self.join_channel(conn_id, DEFAULT_CHANNEL_ID) {
             self.connections.remove(&conn_id);
@@ -41,6 +47,10 @@ impl MessageRouter {
         }
 
         Ok(())
+    }
+
+    pub fn has_connection(&self, conn_id: ConnectionId) -> bool {
+        self.connections.contains_key(&conn_id)
     }
 
     pub fn remove_connection(&mut self, conn_id: ConnectionId) {

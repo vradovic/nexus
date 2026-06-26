@@ -3,11 +3,17 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::models::{
-    BlockedUser, Friend, FriendRequest, FriendRequestView, UserProfile, UserRegisteredEvent,
+    BlockedUser, ChatMessage, Friend, FriendRequest, FriendRequestView, UserProfile,
+    UserRegisteredEvent,
 };
 
 #[derive(Clone)]
 pub struct UserProfileRepository {
+    db: PgPool,
+}
+
+#[derive(Clone)]
+pub struct ChatRepository {
     db: PgPool,
 }
 
@@ -447,6 +453,59 @@ impl UserProfileRepository {
         .bind(request_id)
         .bind(recipient_id)
         .fetch_optional(&self.db)
+        .await
+        .map_err(|_| AppError::internal("database operation failed"))
+    }
+}
+
+impl ChatRepository {
+    pub fn new(db: PgPool) -> Self {
+        Self { db }
+    }
+
+    pub async fn create_message(
+        &self,
+        channel: &str,
+        sender_id: Uuid,
+        body: &str,
+    ) -> Result<ChatMessage, AppError> {
+        sqlx::query_as::<_, ChatMessage>(
+            r#"
+            insert into chat_messages (id, channel, sender_id, body)
+            values ($1, $2, $3, $4)
+            returning id, channel, sender_id, body, created_at::text as created_at
+            "#,
+        )
+        .bind(Uuid::new_v4())
+        .bind(channel)
+        .bind(sender_id)
+        .bind(body)
+        .fetch_one(&self.db)
+        .await
+        .map_err(|_| AppError::internal("database operation failed"))
+    }
+
+    pub async fn list_recent_messages(
+        &self,
+        channel: &str,
+        limit: i64,
+    ) -> Result<Vec<ChatMessage>, AppError> {
+        sqlx::query_as::<_, ChatMessage>(
+            r#"
+            select id, channel, sender_id, body, created_at
+            from (
+                select id, channel, sender_id, body, created_at::text as created_at, created_at as sort_created_at
+                from chat_messages
+                where channel = $1
+                order by created_at desc
+                limit $2
+            ) recent_messages
+            order by sort_created_at asc
+            "#,
+        )
+        .bind(channel)
+        .bind(limit)
+        .fetch_all(&self.db)
         .await
         .map_err(|_| AppError::internal("database operation failed"))
     }

@@ -33,14 +33,11 @@ pub async fn ensure_pull_consumer(
     filter_subject: &str,
 ) -> Result<(), AppError> {
     let jetstream = jetstream::new(nats_client.clone());
-    let stream = jetstream
-        .get_stream(stream_name)
-        .await
-        .map_err(|error| {
-            AppError::internal(&format!(
-                "failed to get nats stream '{stream_name}': {error}"
-            ))
-        })?;
+    let stream = jetstream.get_stream(stream_name).await.map_err(|error| {
+        AppError::internal(&format!(
+            "failed to get nats stream '{stream_name}': {error}"
+        ))
+    })?;
 
     stream
         .get_or_create_consumer(

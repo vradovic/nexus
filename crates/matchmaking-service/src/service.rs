@@ -11,8 +11,8 @@ use uuid::Uuid;
 use crate::{
     app_state::AppState,
     models::{
-        CreateMatchmakingRuleRequest, JoinMatchmakingRequest, MatchmakingRule,
-        MatchmakingTicket, PendingMatch,
+        CreateMatchmakingRuleRequest, JoinMatchmakingRequest, MatchmakingRule, MatchmakingTicket,
+        PendingMatch,
     },
     repository::MatchmakingRuleRepository,
     store::MatchmakingStore,
@@ -69,8 +69,12 @@ pub async fn get_matchmaking_status(
     matchmaking_store: &MatchmakingStore,
     player_id: Uuid,
 ) -> Result<(Option<MatchmakingTicket>, Option<PendingMatch>), AppError> {
-    let ticket = matchmaking_store.find_ticket_by_player_id(player_id).await?;
-    let pending_match = matchmaking_store.find_pending_match_by_player_id(player_id).await?;
+    let ticket = matchmaking_store
+        .find_ticket_by_player_id(player_id)
+        .await?;
+    let pending_match = matchmaking_store
+        .find_pending_match_by_player_id(player_id)
+        .await?;
 
     Ok((ticket, pending_match))
 }
@@ -89,7 +93,10 @@ pub async fn leave_matchmaking(
         ));
     }
 
-    let Some(ticket) = matchmaking_store.find_ticket_by_player_id(player_id).await? else {
+    let Some(ticket) = matchmaking_store
+        .find_ticket_by_player_id(player_id)
+        .await?
+    else {
         return Ok(());
     };
 
@@ -105,7 +112,8 @@ pub async fn confirm_match(
     player_id: Uuid,
     match_id: Uuid,
 ) -> Result<(), AppError> {
-    let Some(mut pending_match) = matchmaking_store.find_pending_match_by_id(match_id).await? else {
+    let Some(mut pending_match) = matchmaking_store.find_pending_match_by_id(match_id).await?
+    else {
         return Err(AppError::not_found("pending match was not found"));
     };
 
@@ -115,7 +123,9 @@ pub async fn confirm_match(
     }
 
     if !pending_match.player_ids.contains(&player_id) {
-        return Err(AppError::forbidden("player is not part of this pending match"));
+        return Err(AppError::forbidden(
+            "player is not part of this pending match",
+        ));
     }
 
     if !pending_match.confirmed_player_ids.contains(&player_id) {
@@ -138,7 +148,9 @@ pub async fn confirm_match(
         )
         .await?;
 
-        matchmaking_store.delete_pending_match(&pending_match).await?;
+        matchmaking_store
+            .delete_pending_match(&pending_match)
+            .await?;
         return Ok(());
     }
 
@@ -156,7 +168,9 @@ pub async fn decline_match(
     };
 
     if !pending_match.player_ids.contains(&player_id) {
-        return Err(AppError::forbidden("player is not part of this pending match"));
+        return Err(AppError::forbidden(
+            "player is not part of this pending match",
+        ));
     }
 
     eprintln!(
@@ -188,9 +202,7 @@ pub async fn create_matchmaking_rule(
     }
 
     if payload.required_players < 2 {
-        return Err(AppError::bad_request(
-            "required_players must be at least 2",
-        ));
+        return Err(AppError::bad_request("required_players must be at least 2"));
     }
 
     matchmaking_rule_repository
@@ -226,7 +238,10 @@ async fn process_pending_matches(state: &AppState) -> Result<(), AppError> {
 }
 
 async fn process_rules(state: &AppState) -> Result<(), AppError> {
-    let rules = state.matchmaking_rule_repository.find_enabled_rules().await?;
+    let rules = state
+        .matchmaking_rule_repository
+        .find_enabled_rules()
+        .await?;
 
     for rule in rules {
         matchmake_rule(state, &rule).await?;
@@ -273,7 +288,10 @@ async fn matchmake_rule(state: &AppState, rule: &MatchmakingRule) -> Result<(), 
         expires_at_unix_seconds: current_unix_timestamp() + PENDING_MATCH_TTL_SECONDS,
     };
 
-    state.matchmaking_store.save_pending_match(&pending_match).await?;
+    state
+        .matchmaking_store
+        .save_pending_match(&pending_match)
+        .await?;
 
     eprintln!(
         "publishing match_found for match_id={} ticket_key={} players={:?}",

@@ -18,7 +18,8 @@ impl MatchmakingStore {
 
     pub async fn save_ticket(&self, ticket: &MatchmakingTicket) -> Result<(), AppError> {
         write_json(&self.redis_client, &ticket_key(ticket.id), ticket).await?;
-        self.save_player_ticket_mapping(ticket.player_id, ticket.id).await
+        self.save_player_ticket_mapping(ticket.player_id, ticket.id)
+            .await
     }
 
     pub async fn find_ticket_by_id(
@@ -237,9 +238,10 @@ impl MatchmakingStore {
 
             match self.find_pending_match_by_id(pending_match_id).await? {
                 Some(pending_match) => pending_matches.push(pending_match),
-                None => self
-                    .remove_pending_match_from_active_set(pending_match_id)
-                    .await?,
+                None => {
+                    self.remove_pending_match_from_active_set(pending_match_id)
+                        .await?
+                }
             }
         }
 
@@ -259,10 +261,7 @@ impl MatchmakingStore {
             .map_err(|_| AppError::internal("failed to delete pending match"))?;
 
         connection
-            .srem::<String, String, ()>(
-                active_pending_matches_key(),
-                pending_match.id.to_string(),
-            )
+            .srem::<String, String, ()>(active_pending_matches_key(), pending_match.id.to_string())
             .await
             .map_err(|_| AppError::internal("failed to remove pending match from index"))?;
 

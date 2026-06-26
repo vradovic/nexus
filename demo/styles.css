@@ -440,6 +440,60 @@ h2 {
   color: #343d4a;
 }
 
+.chat-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.chat-messages {
+  height: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  list-style: none;
+  padding: 0;
+  font-size: 13px;
+}
+
+.chat-messages li {
+  display: grid;
+  gap: 3px;
+  padding: 8px;
+  border: 1px solid #e1e6ee;
+  border-radius: 6px;
+  background: #fbfcfe;
+  color: #343d4a;
+}
+
+.chat-messages li.empty {
+  color: #758091;
+}
+
+.chat-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: #6d7786;
+  font-size: 11px;
+}
+
+.chat-body {
+  overflow-wrap: anywhere;
+}
+
+.chat-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+#chat-status {
+  min-height: 18px;
+  color: #4f5b6b;
+  font-size: 13px;
+}
+
 .social-actions {
   display: grid;
   gap: 8px;

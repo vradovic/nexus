@@ -2,6 +2,7 @@ mod app_state;
 mod db;
 mod messaging;
 mod models;
+mod profanity;
 mod repository;
 mod routes;
 mod service;
@@ -12,8 +13,12 @@ use app_state::AppState;
 use axum::Router;
 use db::init_db;
 use messaging::{
-    ensure_events_stream, ensure_registration_consumer, start_user_registered_consumer,
+    ensure_commands_stream, ensure_events_stream, ensure_registration_consumer,
+    start_user_registered_consumer,
 };
+use profanity::ProfanityFilter;
+
+const DEFAULT_BAD_WORDS_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/bad_words.txt");
 
 #[tokio::main]
 async fn main() {
@@ -28,9 +33,14 @@ async fn main() {
         .await
         .expect("failed to connect to nats");
     ensure_events_stream(&nats_client).await;
+    ensure_commands_stream(&nats_client).await;
     ensure_registration_consumer(&nats_client).await;
 
-    let state = AppState::new(pool, jwt_secret);
+    let bad_words_path =
+        std::env::var("BAD_WORDS_PATH").unwrap_or_else(|_| DEFAULT_BAD_WORDS_PATH.to_string());
+    let profanity_filter =
+        ProfanityFilter::from_file(&bad_words_path).expect("failed to load bad words file");
+    let state = AppState::new(pool, nats_client.clone(), jwt_secret, profanity_filter);
     let consumer_repository = state.user_profile_repository.clone();
 
     tokio::spawn(async move {

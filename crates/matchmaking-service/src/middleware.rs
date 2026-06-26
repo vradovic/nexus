@@ -12,7 +12,14 @@ pub async fn require_player_role(
     request: Request,
     next: Next,
 ) -> Result<Response, AppError> {
-    require_role(state, request, next, UserRole::Player, "player role is required").await
+    require_role(
+        state,
+        request,
+        next,
+        UserRole::Player,
+        "player role is required",
+    )
+    .await
 }
 
 pub async fn require_admin_role(
@@ -20,7 +27,14 @@ pub async fn require_admin_role(
     request: Request,
     next: Next,
 ) -> Result<Response, AppError> {
-    require_role(state, request, next, UserRole::Admin, "admin role is required").await
+    require_role(
+        state,
+        request,
+        next,
+        UserRole::Admin,
+        "admin role is required",
+    )
+    .await
 }
 
 async fn require_role(

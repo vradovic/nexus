@@ -1,6 +1,6 @@
 use axum::{
     Extension, Json, Router,
-    extract::{Path, Request, State},
+    extract::{Path, Query, Request, State},
     http::StatusCode,
     middleware::{self, Next},
     response::{IntoResponse, Response},
@@ -12,14 +12,18 @@ use uuid::Uuid;
 
 use crate::app_state::AppState;
 use crate::models::{
-    BlockUserRequest, BlockedUser, Friend, FriendRequest, FriendRequestsResponse,
-    SendFriendRequest, UserProfile,
+    BlockUserRequest, BlockedUser, ChatMessage, Friend, FriendRequest, FriendRequestsResponse,
+    ListChatMessages, SendChatMessage, SendFriendRequest, UserProfile,
 };
-use crate::service;
+use crate::{messaging, service};
 
 pub fn app_router(state: AppState) -> Router {
     let authenticated_routes = Router::new()
         .route("/friends", get(list_friends))
+        .route(
+            "/chat/messages",
+            get(list_chat_messages).post(send_chat_message),
+        )
         .route("/blocks", get(list_blocks).post(block_user))
         .route("/blocks/{blocked_user_id}", delete(unblock_user))
         .route(
@@ -73,6 +77,29 @@ async fn send_friend_request(
     .await?;
 
     Ok(Json(request))
+}
+
+async fn send_chat_message(
+    State(state): State<AppState>,
+    Json(payload): Json<SendChatMessage>,
+) -> Result<Json<ChatMessage>, AppError> {
+    let message =
+        service::send_chat_message(&state.chat_repository, &state.profanity_filter, payload)
+            .await?;
+
+    messaging::publish_chat_message(&state.nats_client, &message).await?;
+
+    Ok(Json(message))
+}
+
+async fn list_chat_messages(
+    State(state): State<AppState>,
+    Query(query): Query<ListChatMessages>,
+) -> Result<Json<Vec<ChatMessage>>, AppError> {
+    let messages =
+        service::list_chat_messages(&state.chat_repository, &query.channel, query.limit).await?;
+
+    Ok(Json(messages))
 }
 
 async fn list_friends(

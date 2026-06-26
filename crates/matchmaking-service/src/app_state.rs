@@ -13,7 +13,12 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(db: PgPool, redis_client: RedisClient, jwt_secret: String, nats_client: NatsClient) -> Self {
+    pub fn new(
+        db: PgPool,
+        redis_client: RedisClient,
+        jwt_secret: String,
+        nats_client: NatsClient,
+    ) -> Self {
         Self {
             matchmaking_store: MatchmakingStore::new(redis_client),
             matchmaking_rule_repository: MatchmakingRuleRepository::new(db),

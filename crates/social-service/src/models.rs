@@ -67,3 +67,26 @@ pub struct BlockedUser {
     pub first_name: String,
     pub last_name: String,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct SendChatMessage {
+    pub channel: String,
+    #[serde(alias = "sender")]
+    pub sender_id: Uuid,
+    pub body: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ListChatMessages {
+    pub channel: String,
+    pub limit: Option<i64>,
+}
+
+#[derive(Debug, Serialize, FromRow)]
+pub struct ChatMessage {
+    pub id: Uuid,
+    pub channel: String,
+    pub sender_id: Uuid,
+    pub body: String,
+    pub created_at: String,
+}

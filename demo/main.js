@@ -77,6 +77,11 @@ const sendFriendRequestButton = document.querySelector("#send-friend-request-but
 const friendRequestStatus = document.querySelector("#friend-request-status");
 const blockOpponentButton = document.querySelector("#block-opponent-button");
 const blockStatus = document.querySelector("#block-status");
+const chatMessagesList = document.querySelector("#chat-messages");
+const chatForm = document.querySelector("#chat-form");
+const chatInput = document.querySelector("#chat-input");
+const chatSendButton = document.querySelector("#chat-send-button");
+const chatStatus = document.querySelector("#chat-status");
 
 let board = null;
 let socket = null;
@@ -100,9 +105,11 @@ let statusRequestInFlight = false;
 let friendRequestBusy = false;
 let blockBusy = false;
 let friendsRequestInFlight = false;
+let chatRequestBusy = false;
 const confirmedMatchIds = new Set();
 const sentFriendRequestRecipientIds = new Set();
 const blockedUserIds = new Set();
+const chatMessageIds = new Set();
 
 if (authProfile?.email) {
   loginEmailInput.value = authProfile.email;
@@ -227,6 +234,17 @@ blockOpponentButton.addEventListener("click", () => {
     renderGameSocialState();
     blockStatus.textContent = error.message || "Failed to block player.";
   });
+});
+
+chatForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  sendChatMessage().catch((error) => {
+    chatStatus.textContent = error.message || "Failed to send message.";
+  });
+});
+
+chatInput.addEventListener("input", () => {
+  renderChatState();
 });
 
 window.addEventListener("resize", () => {
@@ -1020,6 +1038,11 @@ function applyPayload(payload) {
     return;
   }
 
+  if (payload.type === "chat.message") {
+    handleChatPayload(payload);
+    return;
+  }
+
   if (!activeMatch) {
     return;
   }
@@ -1081,6 +1104,9 @@ async function enterGameChannel(payload) {
   showPage("game");
   await initializeBoard();
   board?.resize();
+  await loadChatMessages().catch((error) => {
+    chatStatus.textContent = error.message || "Failed to load chat.";
+  });
   writeLog(`match found: ${formatQueueName(nextMatch.ticketKey)}`);
 
   sendPayload({
@@ -1147,8 +1173,141 @@ function resetBoardState() {
   lastEvent.textContent = "none";
   moveCount.textContent = "0";
   logList.replaceChildren();
+  resetChatState();
   renderGameSocialState();
   setBoardPosition(START_POSITION, false);
+}
+
+async function sendChatMessage() {
+  if (chatRequestBusy || !activeMatch?.channel || !clientId) {
+    return;
+  }
+
+  const body = chatInput.value.trim();
+  if (!body) {
+    return;
+  }
+
+  chatRequestBusy = true;
+  chatStatus.textContent = "Sending";
+  renderChatState();
+
+  try {
+    const message = await socialRequest("chat/messages", {
+      method: "POST",
+      body: {
+        sender: clientId,
+        channel: activeMatch.channel,
+        body,
+      },
+    });
+    chatInput.value = "";
+    appendChatMessage(message);
+    chatStatus.textContent = "";
+  } finally {
+    chatRequestBusy = false;
+    renderChatState();
+  }
+}
+
+async function loadChatMessages() {
+  if (!activeMatch?.channel) {
+    resetChatState();
+    return;
+  }
+
+  const channel = activeMatch.channel;
+  const params = new URLSearchParams({
+    channel,
+    limit: "50",
+  });
+
+  chatStatus.textContent = "Loading";
+  renderChatState();
+
+  const messages = await socialRequest(`chat/messages?${params}`);
+  if (activeMatch?.channel !== channel) {
+    return;
+  }
+
+  chatMessagesList.replaceChildren();
+  chatMessageIds.clear();
+
+  for (const message of messages || []) {
+    appendChatMessage(message);
+  }
+
+  if (!chatMessagesList.children.length) {
+    showEmptyChatMessage();
+  }
+
+  chatStatus.textContent = "";
+  renderChatState();
+}
+
+function handleChatPayload(payload) {
+  const message = payload.message || payload;
+  const channel = payload.channel || message.channel || "";
+
+  if (!activeMatch?.channel || channel !== activeMatch.channel) {
+    return;
+  }
+
+  appendChatMessage(message);
+}
+
+function resetChatState() {
+  chatMessageIds.clear();
+  showEmptyChatMessage(activeMatch?.channel ? "No messages yet" : "Join a match to chat");
+  chatStatus.textContent = "";
+  renderChatState();
+}
+
+function renderChatState() {
+  const canSend = Boolean(activeMatch?.channel && clientId && !chatRequestBusy);
+  chatInput.disabled = !canSend;
+  chatSendButton.disabled = !canSend || !chatInput.value.trim();
+}
+
+function appendChatMessage(message) {
+  if (!message || typeof message !== "object") {
+    return;
+  }
+
+  const messageId = message.id || "";
+  if (messageId && chatMessageIds.has(messageId)) {
+    return;
+  }
+  if (messageId) {
+    chatMessageIds.add(messageId);
+  }
+
+  chatMessagesList.querySelector(".empty")?.remove();
+
+  const item = document.createElement("li");
+  const meta = document.createElement("div");
+  const sender = document.createElement("span");
+  const time = document.createElement("span");
+  const body = document.createElement("p");
+  const senderId = message.sender_id || message.senderId || "";
+
+  meta.className = "chat-meta";
+  sender.textContent = senderId === clientId ? "You" : shortId(senderId || "unknown");
+  time.textContent = formatChatTime(message.created_at || message.createdAt);
+  body.className = "chat-body";
+  body.textContent = message.body || "";
+
+  meta.append(sender, time);
+  item.append(meta, body);
+  chatMessagesList.append(item);
+  chatMessagesList.scrollTop = chatMessagesList.scrollHeight;
+}
+
+function showEmptyChatMessage(message = "No messages yet") {
+  const item = document.createElement("li");
+  item.className = "empty";
+  item.textContent = message;
+  chatMessagesList.replaceChildren(item);
 }
 
 async function sendFriendRequestToOpponent() {
@@ -1334,6 +1493,18 @@ function winnerLabel(winner) {
   if (winner === "w") return "White";
   if (winner === "b") return "Black";
   return "No one";
+}
+
+function formatChatTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function isSocketOpen() {

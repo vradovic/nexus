@@ -123,7 +123,8 @@ async fn create_matchmaking_rule(
     State(state): State<AppState>,
     Json(payload): Json<CreateMatchmakingRuleRequest>,
 ) -> Result<(StatusCode, Json<MatchmakingRule>), AppError> {
-    let rule = service::create_matchmaking_rule(&state.matchmaking_rule_repository, payload).await?;
+    let rule =
+        service::create_matchmaking_rule(&state.matchmaking_rule_repository, payload).await?;
 
     Ok((StatusCode::CREATED, Json(rule)))
 }

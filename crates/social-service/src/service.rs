@@ -2,9 +2,11 @@ use nexus_shared::AppError;
 use uuid::Uuid;
 
 use crate::models::{
-    BlockedUser, Friend, FriendRequest, FriendRequestsResponse, UserProfile, UserRegisteredEvent,
+    BlockedUser, ChatMessage, Friend, FriendRequest, FriendRequestsResponse, SendChatMessage,
+    UserProfile, UserRegisteredEvent,
 };
-use crate::repository::UserProfileRepository;
+use crate::profanity::ProfanityFilter;
+use crate::repository::{ChatRepository, UserProfileRepository};
 
 pub async fn handle_user_registered(
     repository: &UserProfileRepository,
@@ -119,4 +121,42 @@ pub async fn list_blocked_users(
     blocker_id: Uuid,
 ) -> Result<Vec<BlockedUser>, AppError> {
     repository.list_blocked_users(blocker_id).await
+}
+
+pub async fn send_chat_message(
+    repository: &ChatRepository,
+    profanity_filter: &ProfanityFilter,
+    request: SendChatMessage,
+) -> Result<ChatMessage, AppError> {
+    let channel = request.channel.trim();
+    let body = request.body.trim();
+
+    if channel.is_empty() {
+        return Err(AppError::bad_request("channel is required"));
+    }
+
+    if body.is_empty() {
+        return Err(AppError::bad_request("body is required"));
+    }
+
+    let body = profanity_filter.mask(body);
+
+    repository
+        .create_message(channel, request.sender_id, &body)
+        .await
+}
+
+pub async fn list_chat_messages(
+    repository: &ChatRepository,
+    channel: &str,
+    limit: Option<i64>,
+) -> Result<Vec<ChatMessage>, AppError> {
+    let channel = channel.trim();
+    if channel.is_empty() {
+        return Err(AppError::bad_request("channel is required"));
+    }
+
+    let limit = limit.unwrap_or(50).clamp(1, 100);
+
+    repository.list_recent_messages(channel, limit).await
 }

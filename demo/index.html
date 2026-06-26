@@ -260,6 +260,23 @@
             </div>
           </section>
 
+          <section class="chat-panel" aria-label="Match chat">
+            <h2>Chat</h2>
+            <ol id="chat-messages" class="chat-messages"></ol>
+            <form id="chat-form" class="chat-form">
+              <input
+                id="chat-input"
+                type="text"
+                autocomplete="off"
+                maxlength="500"
+                placeholder="Message"
+                disabled
+              />
+              <button id="chat-send-button" type="submit" disabled>Send</button>
+            </form>
+            <p id="chat-status" aria-live="polite"></p>
+          </section>
+
           <section>
             <h2>Events</h2>
             <ol id="log"></ol>

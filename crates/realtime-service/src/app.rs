@@ -28,6 +28,10 @@ use crate::messaging::{ChannelId, MessageRouter, MessagingError};
 
 const REALTIME_MESSAGE_EVENT_SUBJECT: &str = "events.realtime.message";
 
+fn user_channel_id(user_id: Uuid) -> ChannelId {
+    format!("user:{user_id}")
+}
+
 #[derive(Debug, Default, Deserialize)]
 struct WsQuery {
     token: Option<String>,
@@ -98,6 +102,10 @@ impl AppState {
         let mut match_channels = self.match_channels.lock().await;
 
         match_channels.join_pending_match_channels(&mut message_router, player_id)
+    }
+
+    pub async fn has_active_connection(&self, user_id: Uuid) -> bool {
+        self.message_router.lock().await.has_connection(user_id)
     }
 }
 
@@ -228,18 +236,39 @@ async fn handle_ws(
         "websocket authenticated"
     );
 
+    if state.has_active_connection(user.user_id).await {
+        return (
+            StatusCode::CONFLICT,
+            "user already has an active websocket connection",
+        )
+            .into_response();
+    }
+
     ws.on_upgrade(move |socket| handle_socket(socket, state, user.user_id))
 }
 
 async fn handle_socket(socket: WebSocket, state: Arc<AppState>, conn_id: Uuid) {
     let (mut socket_sender, mut socket_receiver) = socket.split();
     let (tx, mut rx) = mpsc::unbounded_channel::<Message>();
+    let user_channel = user_channel_id(conn_id);
 
     {
         let mut message_router = state.message_router.lock().await;
-        message_router
-            .add_connection(conn_id, tx)
-            .expect("failed to add websocket connection to channel");
+        if let Err(error) = message_router.add_connection(conn_id, tx) {
+            tracing::warn!(%error, %conn_id, "failed to add websocket connection");
+            return;
+        }
+        message_router.create_channel(&user_channel);
+        if let Err(error) = message_router.join_channel(conn_id, &user_channel) {
+            message_router.remove_connection(conn_id);
+            tracing::error!(
+                %error,
+                %conn_id,
+                channel = %user_channel,
+                "failed to join user channel"
+            );
+            return;
+        }
     }
     tracing::debug!(%conn_id, "websocket connection registered");
 
@@ -289,6 +318,9 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>, conn_id: Uuid) {
     {
         let mut message_router = state.message_router.lock().await;
         message_router.remove_connection(conn_id);
+        if let Err(error) = message_router.remove_channel(&user_channel) {
+            tracing::error!(%error, %conn_id, channel = %user_channel, "failed to remove user channel");
+        }
     }
     writer_task.abort();
     tracing::debug!(%conn_id, "websocket connection removed");
