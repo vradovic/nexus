@@ -4,24 +4,25 @@ use std::{
 };
 
 use axum::{
-    Router,
+    Json, Router,
     extract::{
         Query, State, WebSocketUpgrade,
         ws::{Message, WebSocket},
     },
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     routing::get,
 };
 use futures_util::{SinkExt, StreamExt};
 use nexus_shared::{
-    MATCH_CHANNEL_READY_SUBJECT, MatchChannelReadyEvent, MatchConfirmedEvent,
-    authenticated_user_from_token,
+    ACTIVE_USER_PROFILES_REQUEST_SUBJECT, ActiveUserProfile, ActiveUserProfilesRequest, AppError,
+    MATCH_CHANNEL_READY_SUBJECT, MatchChannelReadyEvent, MatchConfirmedEvent, UserRole,
+    authenticated_user, authenticated_user_from_token,
     nats::{NatsAdapter, NatsError},
 };
 use serde::{Deserialize, Serialize};
 use tokio::sync::{Mutex, mpsc};
-use tower_http::trace::TraceLayer;
+use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use uuid::Uuid;
 
 use crate::messaging::{ChannelId, MessageRouter, MessagingError};
@@ -106,6 +107,19 @@ impl AppState {
 
     pub async fn has_active_connection(&self, user_id: Uuid) -> bool {
         self.message_router.lock().await.has_connection(user_id)
+    }
+
+    pub async fn active_connection_ids(&self) -> Vec<Uuid> {
+        self.message_router.lock().await.active_connection_ids()
+    }
+
+    pub async fn active_user_profiles(&self) -> Result<Vec<ActiveUserProfile>, NatsError> {
+        let user_ids = self.active_connection_ids().await;
+        let request = ActiveUserProfilesRequest { user_ids };
+
+        self.nats
+            .request_json(ACTIVE_USER_PROFILES_REQUEST_SUBJECT, &request)
+            .await
     }
 }
 
@@ -203,13 +217,32 @@ impl MatchChannelRegistry {
 pub fn build_router(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/health", get(handle_health))
+        .route("/admin/active-users", get(handle_active_users))
         .route("/ws", get(handle_ws))
+        .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }
 
 async fn handle_health() -> &'static str {
     "ok"
+}
+
+async fn handle_active_users(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> Result<Json<Vec<ActiveUserProfile>>, AppError> {
+    let user = authenticated_user(&headers, &state.jwt_secret)?;
+    if user.role != UserRole::Admin {
+        return Err(AppError::forbidden("admin role is required"));
+    }
+
+    let profiles = state
+        .active_user_profiles()
+        .await
+        .map_err(|_| AppError::internal("failed to fetch active users"))?;
+
+    Ok(Json(profiles))
 }
 
 async fn handle_ws(

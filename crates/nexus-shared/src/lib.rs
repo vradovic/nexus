@@ -1,3 +1,4 @@
+pub mod admin;
 pub mod auth;
 pub mod error;
 pub mod matchmaking;
@@ -5,6 +6,9 @@ pub mod messaging;
 pub mod nats;
 pub mod redis_store;
 
+pub use admin::{
+    ACTIVE_USER_PROFILES_REQUEST_SUBJECT, ActiveUserProfile, ActiveUserProfilesRequest,
+};
 pub use auth::{
     AccessTokenClaims, AuthenticatedUser, UserRole, authenticated_user,
     authenticated_user_from_token, authenticated_user_id, decode_access_token,

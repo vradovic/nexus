@@ -1,3 +1,4 @@
+use nexus_shared::ActiveUserProfile;
 use nexus_shared::AppError;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -54,6 +55,33 @@ impl UserProfileRepository {
         .fetch_optional(&self.db)
         .await
         .map_err(|_| AppError::internal("database operation failed"))
+    }
+
+    pub async fn list_user_profiles_by_ids(
+        &self,
+        user_ids: &[Uuid],
+    ) -> Result<Vec<ActiveUserProfile>, AppError> {
+        let profiles = sqlx::query_as::<_, UserProfile>(
+            r#"
+            select id, first_name, last_name
+            from user_profiles
+            where id = any($1::uuid[])
+            order by first_name, last_name, id
+            "#,
+        )
+        .bind(user_ids)
+        .fetch_all(&self.db)
+        .await
+        .map_err(|_| AppError::internal("database operation failed"))?;
+
+        Ok(profiles
+            .into_iter()
+            .map(|profile| ActiveUserProfile {
+                id: profile.id,
+                first_name: profile.first_name,
+                last_name: profile.last_name,
+            })
+            .collect())
     }
 
     pub async fn create_friend_request(

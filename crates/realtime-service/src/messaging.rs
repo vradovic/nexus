@@ -53,6 +53,12 @@ impl MessageRouter {
         self.connections.contains_key(&conn_id)
     }
 
+    pub fn active_connection_ids(&self) -> Vec<ConnectionId> {
+        let mut conn_ids = self.connections.keys().copied().collect::<Vec<_>>();
+        conn_ids.sort();
+        conn_ids
+    }
+
     pub fn remove_connection(&mut self, conn_id: ConnectionId) {
         self.connections.remove(&conn_id);
 
@@ -296,5 +302,26 @@ mod tests {
             vec!["default".to_string()]
         );
         assert_eq!(router.all_channels(), vec!["default".to_string()]);
+    }
+
+    #[test]
+    fn active_connection_ids_returns_sorted_connections() {
+        let mut router = MessageRouter::default();
+        let first_conn = Uuid::parse_str("11111111-1111-1111-1111-111111111111").unwrap();
+        let second_conn = Uuid::parse_str("22222222-2222-2222-2222-222222222222").unwrap();
+        let (first_tx, _first_rx) = mpsc::unbounded_channel();
+        let (second_tx, _second_rx) = mpsc::unbounded_channel();
+
+        router
+            .add_connection(second_conn, second_tx)
+            .expect("second connection is added");
+        router
+            .add_connection(first_conn, first_tx)
+            .expect("first connection is added");
+
+        assert_eq!(
+            router.active_connection_ids(),
+            vec![first_conn, second_conn]
+        );
     }
 }

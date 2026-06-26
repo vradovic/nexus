@@ -1,4 +1,4 @@
-use nexus_shared::AppError;
+use nexus_shared::{ActiveUserProfile, AppError};
 use uuid::Uuid;
 
 use crate::models::{
@@ -23,6 +23,17 @@ pub async fn get_user_profile(
         .find_user_profile_by_id(id)
         .await?
         .ok_or_else(|| AppError::not_found("user profile not found"))
+}
+
+pub async fn list_active_user_profiles(
+    repository: &UserProfileRepository,
+    user_ids: Vec<Uuid>,
+) -> Result<Vec<ActiveUserProfile>, AppError> {
+    if user_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    repository.list_user_profiles_by_ids(&user_ids).await
 }
 
 pub async fn send_friend_request(

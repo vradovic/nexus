@@ -14,7 +14,7 @@ use axum::Router;
 use db::init_db;
 use messaging::{
     ensure_commands_stream, ensure_events_stream, ensure_registration_consumer,
-    start_user_registered_consumer,
+    start_active_user_profiles_responder, start_user_registered_consumer,
 };
 use profanity::ProfanityFilter;
 
@@ -41,10 +41,17 @@ async fn main() {
     let profanity_filter =
         ProfanityFilter::from_file(&bad_words_path).expect("failed to load bad words file");
     let state = AppState::new(pool, nats_client.clone(), jwt_secret, profanity_filter);
+    let registration_nats_client = nats_client.clone();
+    let active_users_nats_client = nats_client.clone();
     let consumer_repository = state.user_profile_repository.clone();
+    let active_users_repository = state.user_profile_repository.clone();
 
     tokio::spawn(async move {
-        start_user_registered_consumer(nats_client, consumer_repository).await;
+        start_user_registered_consumer(registration_nats_client, consumer_repository).await;
+    });
+    tokio::spawn(async move {
+        start_active_user_profiles_responder(active_users_nats_client, active_users_repository)
+            .await;
     });
 
     let app: Router = routes::app_router(state);

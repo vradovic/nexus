@@ -44,6 +44,8 @@ pub enum NatsError {
     AckFailed { reason: String },
     #[error("failed to publish nats message on subject {subject}: {reason}")]
     PublishFailed { subject: String, reason: String },
+    #[error("failed to request nats message on subject {subject}: {reason}")]
+    RequestFailed { subject: String, reason: String },
     #[error("failed to serialize nats payload on subject {subject}: {source}")]
     SerializeFailed {
         subject: String,
@@ -59,6 +61,7 @@ pub enum NatsError {
 }
 
 pub struct NatsAdapter {
+    client: async_nats::Client,
     jetstream_ctx: jetstream::Context,
 }
 
@@ -85,12 +88,15 @@ impl NatsAdapter {
                 .map_err(|error| NatsError::ConnectionFailed {
                     reason: error.to_string(),
                 })?;
-        let jetstream_ctx = jetstream::new(client);
+        let jetstream_ctx = jetstream::new(client.clone());
 
         ensure_stream_exists(&jetstream_ctx, EVENTS_STREAM).await?;
         ensure_stream_exists(&jetstream_ctx, COMMANDS_STREAM).await?;
 
-        Ok(Self { jetstream_ctx })
+        Ok(Self {
+            client,
+            jetstream_ctx,
+        })
     }
 
     pub async fn events_reader(&self, consumer_name: &str) -> Result<MessageReader, NatsError> {
@@ -152,6 +158,31 @@ impl NatsAdapter {
 
         self.publish_bytes(subject.to_string(), payload.into())
             .await
+    }
+
+    pub async fn request_json<T, R>(&self, subject: &str, payload: &T) -> Result<R, NatsError>
+    where
+        T: Serialize,
+        R: DeserializeOwned,
+    {
+        let body = serde_json::to_vec(payload).map_err(|error| NatsError::SerializeFailed {
+            subject: subject.to_string(),
+            source: error,
+        })?;
+
+        let response = self
+            .client
+            .request(subject.to_string(), body.into())
+            .await
+            .map_err(|error| NatsError::RequestFailed {
+                subject: subject.to_string(),
+                reason: error.to_string(),
+            })?;
+
+        serde_json::from_slice(&response.payload).map_err(|error| NatsError::DeserializeFailed {
+            subject: subject.to_string(),
+            source: error,
+        })
     }
 
     pub async fn write_commands(&self, commands: Vec<NatsCommandMessage>) -> Result<(), NatsError> {

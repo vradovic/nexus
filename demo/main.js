@@ -9,6 +9,7 @@ window.jQuery = $;
 const START_POSITION = "start";
 const AUTH_URL = "http://127.0.0.1:3001";
 const SOCIAL_URL = "http://127.0.0.1:3002";
+const REALTIME_URL = "http://127.0.0.1:3000";
 const WS_URL = "ws://127.0.0.1:3000/ws";
 const MATCHMAKING_URL = "http://127.0.0.1:3003";
 const TOKEN_STORAGE_KEY = "nexus-demo-access-token";
@@ -114,6 +115,8 @@ let blockBusy = false;
 let friendsRequestInFlight = false;
 let chatRequestBusy = false;
 let adminActiveTab = "users";
+let adminUsersRequestInFlight = false;
+let adminActiveUsers = [];
 const confirmedMatchIds = new Set();
 const sentFriendRequestRecipientIds = new Set();
 const blockedUserIds = new Set();
@@ -198,13 +201,17 @@ showAdminLobbyButton.addEventListener("click", () => {
 
 showAdminButtons.forEach((button) => {
   button.addEventListener("click", () => {
-    openAdminPage();
+    openAdminPage().catch((error) => {
+      renderAdminUsersError(error.message || "Failed to load active users.");
+    });
   });
 });
 
 adminTabButtons.forEach((button) => {
   button.addEventListener("click", () => {
-    showAdminTab(button.dataset.adminTab);
+    handleAdminTabClick(button.dataset.adminTab).catch((error) => {
+      renderAdminUsersError(error.message || "Failed to load active users.");
+    });
   });
 });
 
@@ -427,6 +434,38 @@ async function socialRequest(path, options = {}) {
   return response.json();
 }
 
+async function realtimeRequest(path, options = {}) {
+  const { body, method = "GET" } = options;
+  const headers = {
+    authorization: `Bearer ${authToken}`,
+  };
+
+  if (body !== undefined) {
+    headers["content-type"] = "application/json";
+  }
+
+  const response = await fetch(`${REALTIME_URL}/${path}`, {
+    method,
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+
+  if (response.status === 401) {
+    logout();
+    throw new Error("Session expired. Sign in again.");
+  }
+
+  if (!response.ok) {
+    throw new Error(await errorMessage(response));
+  }
+
+  if (response.status === 204) {
+    return null;
+  }
+
+  return response.json();
+}
+
 async function errorMessage(response) {
   try {
     const data = await response.clone().json();
@@ -624,7 +663,7 @@ async function openFriendsPage() {
   await loadFriendsPage();
 }
 
-function openAdminPage() {
+async function openAdminPage() {
   stopMatchmakingPolling();
 
   if (!isAdmin()) {
@@ -633,7 +672,16 @@ function openAdminPage() {
 
   showPage("admin");
   showAdminTab(adminActiveTab);
-  renderAdminUsers();
+  if (adminActiveTab === "users") {
+    await loadAdminActiveUsers();
+  }
+}
+
+async function handleAdminTabClick(tab) {
+  showAdminTab(tab);
+  if (tab === "users") {
+    await loadAdminActiveUsers();
+  }
 }
 
 function showAdminTab(tab) {
@@ -652,34 +700,37 @@ function showAdminTab(tab) {
   });
 }
 
+async function loadAdminActiveUsers() {
+  if (adminUsersRequestInFlight) {
+    return;
+  }
+
+  adminUsersRequestInFlight = true;
+  showAdminUsersMessage("Loading active users");
+
+  try {
+    adminActiveUsers = await realtimeRequest("admin/active-users");
+    renderAdminUsers();
+  } finally {
+    adminUsersRequestInFlight = false;
+  }
+}
+
 function renderAdminUsers() {
   const search = adminUserSearchInput.value.trim().toLowerCase();
-  const users = adminUsers().filter((user) =>
-    [user.name, user.email, user.role].some((value) => value.toLowerCase().includes(search)),
+  const users = adminActiveUsers.filter((user) =>
+    [profileName(user.first_name, user.last_name, user.id), user.id].some((value) =>
+      value.toLowerCase().includes(search),
+    ),
   );
 
   adminUsersList.replaceChildren(
     ...listItemsOrEmpty(
       users,
       (user) => adminUserItem(user),
-      search ? "No users match the search" : "No users loaded yet",
+      search ? "No active users match the search" : "No active users",
     ),
   );
-}
-
-function adminUsers() {
-  if (!clientId) {
-    return [];
-  }
-
-  return [
-    {
-      id: clientId,
-      name: clientName,
-      email: authProfile?.email || "",
-      role: decodeJwtPayload(authToken)?.role || "player",
-    },
-  ];
 }
 
 function adminUserItem(user) {
@@ -687,11 +738,23 @@ function adminUserItem(user) {
   const name = document.createElement("strong");
   const meta = document.createElement("span");
 
-  name.textContent = user.name;
-  meta.textContent = [user.email, user.role, shortId(user.id)].filter(Boolean).join(" | ");
+  name.textContent = profileName(user.first_name, user.last_name, user.id);
+  meta.textContent = user.id;
 
   item.append(name, meta);
   return item;
+}
+
+function showAdminUsersMessage(message) {
+  const item = document.createElement("li");
+  item.className = "empty";
+  item.textContent = message;
+  adminUsersList.replaceChildren(item);
+}
+
+function renderAdminUsersError(message) {
+  showAdminTab("users");
+  showAdminUsersMessage(message);
 }
 
 async function loadFriendsPage() {

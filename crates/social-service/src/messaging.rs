@@ -1,7 +1,8 @@
 use async_nats::{Client, jetstream};
 use futures_util::StreamExt;
 use nexus_shared::{
-    AppError, ensure_pull_consumer, ensure_stream,
+    ACTIVE_USER_PROFILES_REQUEST_SUBJECT, ActiveUserProfilesRequest, AppError,
+    ensure_pull_consumer, ensure_stream,
     nats::{COMMANDS_FILTER, COMMANDS_STREAM, EVENTS_FILTER, EVENTS_STREAM},
     publish_json,
 };
@@ -115,6 +116,54 @@ pub async fn start_user_registered_consumer(
             Err(error) => {
                 eprintln!("failed to decode registration event: {}", error);
             }
+        }
+    }
+}
+
+pub async fn start_active_user_profiles_responder(
+    nats_client: Client,
+    repository: UserProfileRepository,
+) {
+    let mut subscriber = nats_client
+        .subscribe(ACTIVE_USER_PROFILES_REQUEST_SUBJECT)
+        .await
+        .expect("failed to subscribe to active user profile requests");
+
+    while let Some(message) = subscriber.next().await {
+        let Some(reply) = message.reply.clone() else {
+            eprintln!("active user profile request did not include a reply subject");
+            continue;
+        };
+
+        let response = match serde_json::from_slice::<ActiveUserProfilesRequest>(&message.payload) {
+            Ok(request) => {
+                match service::list_active_user_profiles(&repository, request.user_ids).await {
+                    Ok(profiles) => profiles,
+                    Err(error) => {
+                        eprintln!(
+                            "failed to list active user profiles: {}",
+                            error.into_response_text()
+                        );
+                        Vec::new()
+                    }
+                }
+            }
+            Err(error) => {
+                eprintln!("failed to decode active user profile request: {}", error);
+                Vec::new()
+            }
+        };
+
+        let payload = match serde_json::to_vec(&response) {
+            Ok(payload) => payload,
+            Err(error) => {
+                eprintln!("failed to encode active user profile response: {}", error);
+                Vec::new()
+            }
+        };
+
+        if let Err(error) = nats_client.publish(reply, payload.into()).await {
+            eprintln!("failed to reply to active user profile request: {}", error);
         }
     }
 }
