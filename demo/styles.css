@@ -316,7 +316,8 @@ h2 {
   justify-content: flex-end;
 }
 
-.friends-stage {
+.friends-stage,
+.admin-stage {
   min-height: 0;
   display: grid;
   place-items: start center;
@@ -328,7 +329,8 @@ h2 {
   background-size: 32px 32px;
 }
 
-.friends-panel {
+.friends-panel,
+.admin-panel {
   width: min(100%, 900px);
   display: grid;
   gap: 18px;
@@ -337,6 +339,47 @@ h2 {
   border-radius: 8px;
   background: #ffffff;
   box-shadow: 0 20px 50px rgb(31 38 48 / 12%);
+}
+
+.admin-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid #dbe1ea;
+}
+
+.admin-tabs button {
+  border-color: transparent;
+  border-radius: 6px 6px 0 0;
+  background: transparent;
+  color: #4f5b6b;
+}
+
+.admin-tabs button:hover {
+  background: #eef2f6;
+}
+
+.admin-tabs button.active {
+  border-color: #dbe1ea;
+  border-bottom-color: #ffffff;
+  background: #ffffff;
+  color: #1f2630;
+}
+
+.admin-tab-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.admin-form {
+  width: min(100%, 360px);
+}
+
+.admin-form label {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: #5f6978;
 }
 
 .social-grid {
@@ -546,7 +589,8 @@ dd {
     justify-content: flex-start;
   }
 
-  .friends-stage {
+  .friends-stage,
+  .admin-stage {
     place-items: stretch;
   }
 

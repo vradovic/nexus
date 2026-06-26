@@ -86,6 +86,7 @@
 
         <div class="toolbar-actions">
           <button id="show-friends-button" type="button">Friends</button>
+          <button class="hidden" data-show-admin-button type="button">Admin</button>
           <button data-logout-button type="button">Logout</button>
           <div class="status" aria-live="polite">
             <span class="status-dot" data-status-dot></span>
@@ -148,6 +149,7 @@
 
         <div class="toolbar-actions">
           <button id="show-lobby-button" type="button">Lobby</button>
+          <button class="hidden" data-show-admin-button type="button">Admin</button>
           <button id="refresh-friends-button" type="button">Refresh</button>
           <button data-logout-button type="button">Logout</button>
           <div class="status" aria-live="polite">
@@ -191,6 +193,85 @@
       </main>
     </section>
 
+    <section id="admin-page" class="shell hidden">
+      <header class="toolbar">
+        <div class="identity">
+          <span class="swatch" data-client-color aria-hidden="true"></span>
+          <div>
+            <h1>Nexus Chess</h1>
+            <p data-client-label></p>
+          </div>
+        </div>
+
+        <div class="toolbar-actions">
+          <button id="show-admin-lobby-button" type="button">Lobby</button>
+          <button data-logout-button type="button">Logout</button>
+          <div class="status" aria-live="polite">
+            <span class="status-dot" data-status-dot></span>
+            <span data-status-text>Disconnected</span>
+          </div>
+        </div>
+      </header>
+
+      <main class="admin-stage">
+        <section class="admin-panel" aria-label="Admin">
+          <div class="lobby-header">
+            <div>
+              <h2>Admin</h2>
+            </div>
+          </div>
+
+          <div class="admin-tabs" role="tablist" aria-label="Admin sections">
+            <button
+              id="admin-users-tab"
+              class="active"
+              data-admin-tab="users"
+              type="button"
+              role="tab"
+              aria-controls="admin-users-panel"
+              aria-selected="true"
+            >
+              Users
+            </button>
+            <button
+              id="admin-chats-tab"
+              data-admin-tab="chats"
+              type="button"
+              role="tab"
+              aria-controls="admin-chats-panel"
+              aria-selected="false"
+            >
+              Chats
+            </button>
+          </div>
+
+          <section
+            id="admin-users-panel"
+            class="admin-tab-panel"
+            data-admin-tab-panel="users"
+            role="tabpanel"
+            aria-labelledby="admin-users-tab"
+          >
+            <form class="admin-form">
+              <label>
+                Search users
+                <input id="admin-user-search" type="search" autocomplete="off" placeholder="Name or email" />
+              </label>
+            </form>
+            <ol id="admin-users-list" class="social-list"></ol>
+          </section>
+
+          <section
+            id="admin-chats-panel"
+            class="admin-tab-panel hidden"
+            data-admin-tab-panel="chats"
+            role="tabpanel"
+            aria-labelledby="admin-chats-tab"
+          ></section>
+        </section>
+      </main>
+    </section>
+
     <section id="game-page" class="shell hidden">
       <header class="toolbar">
         <div class="identity">
@@ -204,6 +285,7 @@
         <div class="toolbar-actions">
           <button id="flip-button" type="button">Flip</button>
           <button id="reset-button" type="button">Reset</button>
+          <button class="hidden" data-show-admin-button type="button">Admin</button>
           <button data-logout-button type="button">Logout</button>
           <div class="status" aria-live="polite">
             <span class="status-dot" data-status-dot></span>

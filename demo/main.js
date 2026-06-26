@@ -26,6 +26,7 @@ const loginPage = document.querySelector("#login-page");
 const registerPage = document.querySelector("#register-page");
 const lobbyPage = document.querySelector("#lobby-page");
 const friendsPage = document.querySelector("#friends-page");
+const adminPage = document.querySelector("#admin-page");
 const gamePage = document.querySelector("#game-page");
 
 const loginForm = document.querySelector("#login-form");
@@ -50,12 +51,18 @@ const statusDots = document.querySelectorAll("[data-status-dot]");
 const statusTexts = document.querySelectorAll("[data-status-text]");
 const showFriendsButton = document.querySelector("#show-friends-button");
 const showLobbyButton = document.querySelector("#show-lobby-button");
+const showAdminLobbyButton = document.querySelector("#show-admin-lobby-button");
+const showAdminButtons = document.querySelectorAll("[data-show-admin-button]");
 const refreshFriendsButton = document.querySelector("#refresh-friends-button");
 const friendsStatus = document.querySelector("#friends-status");
 const friendsList = document.querySelector("#friends-list");
 const incomingFriendRequestsList = document.querySelector("#incoming-friend-requests");
 const outgoingFriendRequestsList = document.querySelector("#outgoing-friend-requests");
 const blockedUsersList = document.querySelector("#blocked-users-list");
+const adminTabButtons = document.querySelectorAll("[data-admin-tab]");
+const adminTabPanels = document.querySelectorAll("[data-admin-tab-panel]");
+const adminUserSearchInput = document.querySelector("#admin-user-search");
+const adminUsersList = document.querySelector("#admin-users-list");
 
 const queueButtons = document.querySelectorAll("[data-ticket-key]");
 const queueStatus = document.querySelector("#queue-status");
@@ -106,6 +113,7 @@ let friendRequestBusy = false;
 let blockBusy = false;
 let friendsRequestInFlight = false;
 let chatRequestBusy = false;
+let adminActiveTab = "users";
 const confirmedMatchIds = new Set();
 const sentFriendRequestRecipientIds = new Set();
 const blockedUserIds = new Set();
@@ -178,6 +186,30 @@ showLobbyButton.addEventListener("click", () => {
     queueStatus.textContent = error.message || "Failed to refresh matchmaking.";
   });
   startMatchmakingPolling();
+});
+
+showAdminLobbyButton.addEventListener("click", () => {
+  showPage("lobby");
+  refreshMatchmakingStatus().catch((error) => {
+    queueStatus.textContent = error.message || "Failed to refresh matchmaking.";
+  });
+  startMatchmakingPolling();
+});
+
+showAdminButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    openAdminPage();
+  });
+});
+
+adminTabButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    showAdminTab(button.dataset.adminTab);
+  });
+});
+
+adminUserSearchInput.addEventListener("input", () => {
+  renderAdminUsers();
 });
 
 refreshFriendsButton.addEventListener("click", () => {
@@ -417,6 +449,7 @@ function saveAuth(token, profile) {
     id: claims.sub,
     email: claims.email || profile.email,
     username: profile.username || claims.email,
+    role: claims.role,
   };
 
   localStorage.setItem(TOKEN_STORAGE_KEY, authToken);
@@ -464,14 +497,22 @@ function syncIdentity() {
   clientColors.forEach((swatch) => {
     swatch.style.background = color;
   });
+  showAdminButtons.forEach((button) => {
+    button.classList.toggle("hidden", !isAdmin());
+  });
 }
 
 function showPage(page) {
+  if (page === "admin" && !isAdmin()) {
+    page = "lobby";
+  }
+
   currentPage = page;
   loginPage.classList.toggle("hidden", page !== "login");
   registerPage.classList.toggle("hidden", page !== "register");
   lobbyPage.classList.toggle("hidden", page !== "lobby");
   friendsPage.classList.toggle("hidden", page !== "friends");
+  adminPage.classList.toggle("hidden", page !== "admin");
   gamePage.classList.toggle("hidden", page !== "game");
 
   if (page === "game") {
@@ -581,6 +622,76 @@ async function openFriendsPage() {
   stopMatchmakingPolling();
   showPage("friends");
   await loadFriendsPage();
+}
+
+function openAdminPage() {
+  stopMatchmakingPolling();
+
+  if (!isAdmin()) {
+    return;
+  }
+
+  showPage("admin");
+  showAdminTab(adminActiveTab);
+  renderAdminUsers();
+}
+
+function showAdminTab(tab) {
+  if (tab !== "users" && tab !== "chats") {
+    return;
+  }
+
+  adminActiveTab = tab;
+  adminTabButtons.forEach((button) => {
+    const active = button.dataset.adminTab === tab;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", active ? "true" : "false");
+  });
+  adminTabPanels.forEach((panel) => {
+    panel.classList.toggle("hidden", panel.dataset.adminTabPanel !== tab);
+  });
+}
+
+function renderAdminUsers() {
+  const search = adminUserSearchInput.value.trim().toLowerCase();
+  const users = adminUsers().filter((user) =>
+    [user.name, user.email, user.role].some((value) => value.toLowerCase().includes(search)),
+  );
+
+  adminUsersList.replaceChildren(
+    ...listItemsOrEmpty(
+      users,
+      (user) => adminUserItem(user),
+      search ? "No users match the search" : "No users loaded yet",
+    ),
+  );
+}
+
+function adminUsers() {
+  if (!clientId) {
+    return [];
+  }
+
+  return [
+    {
+      id: clientId,
+      name: clientName,
+      email: authProfile?.email || "",
+      role: decodeJwtPayload(authToken)?.role || "player",
+    },
+  ];
+}
+
+function adminUserItem(user) {
+  const item = document.createElement("li");
+  const name = document.createElement("strong");
+  const meta = document.createElement("span");
+
+  name.textContent = user.name;
+  meta.textContent = [user.email, user.role, shortId(user.id)].filter(Boolean).join(" | ");
+
+  item.append(name, meta);
+  return item;
 }
 
 async function loadFriendsPage() {
@@ -791,6 +902,10 @@ function shortId(id) {
 function profileName(firstName, lastName, fallbackId) {
   const name = [firstName, lastName].filter(Boolean).join(" ").trim();
   return name || shortId(fallbackId);
+}
+
+function isAdmin() {
+  return decodeJwtPayload(authToken)?.role === "admin";
 }
 
 function listItemsOrEmpty(items, renderItem, emptyText) {
