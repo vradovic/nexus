@@ -64,6 +64,7 @@ const adminTabButtons = document.querySelectorAll("[data-admin-tab]");
 const adminTabPanels = document.querySelectorAll("[data-admin-tab-panel]");
 const adminUserSearchInput = document.querySelector("#admin-user-search");
 const adminUsersList = document.querySelector("#admin-users-list");
+const adminChatLogList = document.querySelector("#admin-chat-log-list");
 
 const queueButtons = document.querySelectorAll("[data-ticket-key]");
 const queueStatus = document.querySelector("#queue-status");
@@ -117,6 +118,8 @@ let chatRequestBusy = false;
 let adminActiveTab = "users";
 let adminUsersRequestInFlight = false;
 let adminActiveUsers = [];
+let adminChatLogRequestInFlight = false;
+let adminChatLogMessages = [];
 const confirmedMatchIds = new Set();
 const sentFriendRequestRecipientIds = new Set();
 const blockedUserIds = new Set();
@@ -202,7 +205,7 @@ showAdminLobbyButton.addEventListener("click", () => {
 showAdminButtons.forEach((button) => {
   button.addEventListener("click", () => {
     openAdminPage().catch((error) => {
-      renderAdminUsersError(error.message || "Failed to load active users.");
+      renderAdminTabError(error.message || "Failed to load admin data.");
     });
   });
 });
@@ -210,7 +213,7 @@ showAdminButtons.forEach((button) => {
 adminTabButtons.forEach((button) => {
   button.addEventListener("click", () => {
     handleAdminTabClick(button.dataset.adminTab).catch((error) => {
-      renderAdminUsersError(error.message || "Failed to load active users.");
+      renderAdminTabError(error.message || "Failed to load admin data.");
     });
   });
 });
@@ -674,6 +677,8 @@ async function openAdminPage() {
   showAdminTab(adminActiveTab);
   if (adminActiveTab === "users") {
     await loadAdminActiveUsers();
+  } else if (adminActiveTab === "chats") {
+    await loadAdminChatLog();
   }
 }
 
@@ -681,6 +686,8 @@ async function handleAdminTabClick(tab) {
   showAdminTab(tab);
   if (tab === "users") {
     await loadAdminActiveUsers();
+  } else if (tab === "chats") {
+    await loadAdminChatLog();
   }
 }
 
@@ -733,6 +740,46 @@ function renderAdminUsers() {
   );
 }
 
+async function loadAdminChatLog() {
+  if (adminChatLogRequestInFlight) {
+    return;
+  }
+
+  adminChatLogRequestInFlight = true;
+  showAdminChatLogMessage("Loading chat log");
+
+  try {
+    adminChatLogMessages = await socialRequest("admin/chat/messages");
+    renderAdminChatLog();
+  } finally {
+    adminChatLogRequestInFlight = false;
+  }
+}
+
+function renderAdminChatLog() {
+  adminChatLogList.replaceChildren(
+    ...listItemsOrEmpty(
+      adminChatLogMessages,
+      (message) => adminChatLogItem(message),
+      "No chat messages",
+    ),
+  );
+}
+
+function adminChatLogItem(message) {
+  const item = document.createElement("li");
+  const meta = document.createElement("span");
+  const body = document.createElement("span");
+
+  meta.className = "chat-meta";
+  meta.textContent = `${message.created_at} | ${message.channel} | ${message.sender_id}`;
+  body.className = "chat-body";
+  body.textContent = message.body;
+
+  item.append(meta, body);
+  return item;
+}
+
 function adminUserItem(user) {
   const item = document.createElement("li");
   const name = document.createElement("strong");
@@ -752,9 +799,19 @@ function showAdminUsersMessage(message) {
   adminUsersList.replaceChildren(item);
 }
 
-function renderAdminUsersError(message) {
-  showAdminTab("users");
-  showAdminUsersMessage(message);
+function showAdminChatLogMessage(message) {
+  const item = document.createElement("li");
+  item.className = "empty";
+  item.textContent = message;
+  adminChatLogList.replaceChildren(item);
+}
+
+function renderAdminTabError(message) {
+  if (adminActiveTab === "chats") {
+    showAdminChatLogMessage(message);
+  } else {
+    showAdminUsersMessage(message);
+  }
 }
 
 async function loadFriendsPage() {

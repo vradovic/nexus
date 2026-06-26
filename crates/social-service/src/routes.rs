@@ -6,7 +6,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{delete, get, post},
 };
-use nexus_shared::{AppError, AuthenticatedUser, authenticated_user};
+use nexus_shared::{AppError, AuthenticatedUser, UserRole, authenticated_user};
 use tower_http::cors::CorsLayer;
 use uuid::Uuid;
 
@@ -43,10 +43,18 @@ pub fn app_router(state: AppState) -> Router {
             require_authenticated_user,
         ));
 
+    let admin_routes = Router::new()
+        .route("/admin/chat/messages", get(list_all_chat_messages))
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            require_admin_user,
+        ));
+
     Router::new()
         .route("/health", get(health))
         .route("/users/{id}", get(get_user))
         .merge(authenticated_routes)
+        .merge(admin_routes)
         .layer(CorsLayer::permissive())
         .with_state(state)
 }
@@ -98,6 +106,14 @@ async fn list_chat_messages(
 ) -> Result<Json<Vec<ChatMessage>>, AppError> {
     let messages =
         service::list_chat_messages(&state.chat_repository, &query.channel, query.limit).await?;
+
+    Ok(Json(messages))
+}
+
+async fn list_all_chat_messages(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<ChatMessage>>, AppError> {
+    let messages = service::list_all_chat_messages(&state.chat_repository).await?;
 
     Ok(Json(messages))
 }
@@ -191,6 +207,21 @@ async fn require_authenticated_user(
     next: Next,
 ) -> Result<Response, AppError> {
     let user = authenticated_user(request.headers(), &state.jwt_secret)?;
+    request.extensions_mut().insert(user);
+
+    Ok(next.run(request).await)
+}
+
+async fn require_admin_user(
+    State(state): State<AppState>,
+    mut request: Request,
+    next: Next,
+) -> Result<Response, AppError> {
+    let user = authenticated_user(request.headers(), &state.jwt_secret)?;
+    if user.role != UserRole::Admin {
+        return Err(AppError::forbidden("admin role is required"));
+    }
+
     request.extensions_mut().insert(user);
 
     Ok(next.run(request).await)

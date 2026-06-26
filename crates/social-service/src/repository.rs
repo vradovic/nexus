@@ -537,4 +537,17 @@ impl ChatRepository {
         .await
         .map_err(|_| AppError::internal("database operation failed"))
     }
+
+    pub async fn list_all_messages(&self) -> Result<Vec<ChatMessage>, AppError> {
+        sqlx::query_as::<_, ChatMessage>(
+            r#"
+            select id, channel, sender_id, body, created_at::text as created_at
+            from chat_messages
+            order by created_at desc, id
+            "#,
+        )
+        .fetch_all(&self.db)
+        .await
+        .map_err(|_| AppError::internal("database operation failed"))
+    }
 }

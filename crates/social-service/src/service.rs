@@ -171,3 +171,9 @@ pub async fn list_chat_messages(
 
     repository.list_recent_messages(channel, limit).await
 }
+
+pub async fn list_all_chat_messages(
+    repository: &ChatRepository,
+) -> Result<Vec<ChatMessage>, AppError> {
+    repository.list_all_messages().await
+}
