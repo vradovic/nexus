@@ -1,0 +1,10 @@
+<h2>Home</h2>
+<p>Welcome to Nexus Chess! Useful links and actions:</p>
+<ul>
+    @if (this.showAuthLinks()) {
+    <li><a routerLink="/login">Log in</a></li>
+    <li><a routerLink="/register">Sign up</a></li>
+    } @else {
+    <li><button (click)="onLogOut()">Log out</button></li>
+    }
+</ul>
