@@ -1,38 +1,43 @@
 import { Component, inject, signal } from '@angular/core';
-import { form, FormField } from '@angular/forms/signals';
-import { LoginModel } from '../../models/login.model';
+import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../services/auth.service';
-import { Router, RouterLink } from "@angular/router";
-import { routes } from '../../app/app.routes';
+import { LoginModel } from '../../models/login.model';
 
 @Component({
-  selector: 'app-login',
-  imports: [FormField, RouterLink],
-  templateUrl: './login.component.html',
-  styleUrl: './login.component.scss',
+    selector: 'app-login',
+    imports: [RouterLink],
+    templateUrl: './login.component.html',
+    styleUrl: './login.component.scss',
 })
 export class LoginComponent {
-  loginModel = signal<LoginModel>({
-    email: '',
-    password: '',
-  });
+    private readonly authService = inject(AuthService);
+    private readonly router = inject(Router);
 
-  loginForm = form(this.loginModel);
+    readonly model = signal<LoginModel>({ email: '', password: '' });
+    readonly busy = signal(false);
+    readonly error = signal('');
 
-  authService = inject(AuthService);
-  router = inject(Router);
+    update(field: keyof LoginModel, event: Event) {
+        const value = (event.target as HTMLInputElement).value;
+        this.model.update(model => ({ ...model, [field]: value }));
+    }
 
-  onSubmit(event: Event) {
-    event.preventDefault();
+    onSubmit(event: Event) {
+        event.preventDefault();
 
-    const data = this.loginModel();
-    this.authService.login(data).subscribe({
-      next: () => {
-        this.router.navigate(['/']);
-      },
-      error: () => {
-        alert('Invalid username or password.');
-      },
-    });
-  }
+        if (this.busy()) {
+            return;
+        }
+
+        this.busy.set(true);
+        this.error.set('');
+
+        this.authService.login(this.model()).subscribe({
+            next: () => void this.router.navigate(['/']),
+            error: () => {
+                this.error.set('Invalid email or password.');
+                this.busy.set(false);
+            },
+        });
+    }
 }

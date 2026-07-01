@@ -1,0 +1,26 @@
+<section class="app-shell">
+    <header class="toolbar">
+        <div class="identity">
+            <span class="swatch" [style.background]="auth.userColor()" aria-hidden="true"></span>
+            <div>
+                <h1>Nexus Chess</h1>
+                <p>{{ auth.displayName() }}</p>
+            </div>
+        </div>
+
+        <nav class="toolbar-actions" aria-label="Primary">
+            <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">Lobby</a>
+            <a routerLink="/friends" routerLinkActive="active">Friends</a>
+            @if (auth.isAdmin()) {
+                <a routerLink="/admin" routerLinkActive="active">Admin</a>
+            }
+            <button type="button" class="ghost-button" (click)="logout()">Logout</button>
+            <div class="status" aria-live="polite">
+                <span class="status-dot" [class.connected]="realtime.status() === 'connected'" [class.connecting]="realtime.status() === 'connecting'"></span>
+                <span>{{ realtime.status() }}</span>
+            </div>
+        </nav>
+    </header>
+
+    <router-outlet></router-outlet>
+</section>

@@ -29,6 +29,7 @@
                 "input": "public"
               }
             ],
+            "allowedCommonJsDependencies": ["lodash"],
             "styles": ["src/styles.scss"]
           },
           "configurations": {
@@ -36,7 +37,7 @@
               "budgets": [
                 {
                   "type": "initial",
-                  "maximumWarning": "500kB",
+                  "maximumWarning": "600kB",
                   "maximumError": "1MB"
                 },
                 {

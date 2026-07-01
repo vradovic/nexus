@@ -1,13 +1,26 @@
-<h2>Please log in</h2>
-<form class="auth-form" (submit)="onSubmit($event)">
-    <label>
-        Email:
-        <input type="email" [formField]="loginForm.email">
-    </label>
-    <label>
-        Password:
-        <input type="password" [formField]="loginForm.password">
-    </label>
-    <button type="submit">Login</button>
-</form>
-<a routerLink="/register">Sign up</a>
+<section class="auth-page">
+    <div class="auth-shell">
+        <div class="auth-brand">
+            <span class="swatch" aria-hidden="true"></span>
+            <div>
+                <h1>Nexus Chess</h1>
+                <p>Sign in</p>
+            </div>
+        </div>
+
+        <form class="auth-form" (submit)="onSubmit($event)">
+            <label>
+                Email
+                <input type="email" autocomplete="email" [value]="model().email" (input)="update('email', $event)" required>
+            </label>
+            <label>
+                Password
+                <input type="password" autocomplete="current-password" [value]="model().password" (input)="update('password', $event)" required>
+            </label>
+            <button type="submit" [disabled]="busy()">Login</button>
+        </form>
+
+        <p class="auth-error" aria-live="polite">{{ error() }}</p>
+        <a routerLink="/register" class="link-button">Create account</a>
+    </div>
+</section>

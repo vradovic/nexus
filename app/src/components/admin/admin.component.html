@@ -1,0 +1,76 @@
+<main class="content-stage">
+    <section class="panel wide-panel">
+        <div class="panel-header">
+            <div>
+                <h2>Admin</h2>
+                <p aria-live="polite">{{ status() }}</p>
+            </div>
+            <button type="button" class="ghost-button" [disabled]="busy()" (click)="loadCurrentTab()">Refresh</button>
+        </div>
+
+        <div class="tabs" role="tablist" aria-label="Admin sections">
+            <button type="button" [class.active]="tab() === 'users'" (click)="selectTab('users')">Active users</button>
+            <button type="button" [class.active]="tab() === 'chats'" (click)="selectTab('chats')">Chat log</button>
+            <button type="button" [class.active]="tab() === 'rules'" (click)="selectTab('rules')">Matchmaking rules</button>
+        </div>
+
+        @if (tab() === 'users') {
+            <section class="tab-panel">
+                <input type="search" placeholder="Search users" [value]="search()" (input)="updateSearch($event)">
+                <ol class="social-list">
+                    @for (user of filteredUsers(); track user.id) {
+                        <li>
+                            <strong>{{ profileName(user.first_name, user.last_name, user.id) }}</strong>
+                            <span class="mono">{{ user.id }}</span>
+                        </li>
+                    } @empty {
+                        <li class="empty">No active users</li>
+                    }
+                </ol>
+            </section>
+        }
+
+        @if (tab() === 'chats') {
+            <section class="tab-panel">
+                <ol class="social-list chat-admin-list">
+                    @for (message of chatMessages(); track message.id) {
+                        <li>
+                            <span class="chat-meta">{{ message.created_at }} | {{ message.channel }} | {{ shortId(message.sender_id) }}</span>
+                            <span>{{ message.body }}</span>
+                        </li>
+                    } @empty {
+                        <li class="empty">No chat messages</li>
+                    }
+                </ol>
+            </section>
+        }
+
+        @if (tab() === 'rules') {
+            <section class="tab-panel rules-panel">
+                <form class="inline-form" (submit)="createRule($event)">
+                    <input type="text" placeholder="ticket key" [value]="newTicketKey()" (input)="updateNewTicketKey($event)">
+                    <input type="number" min="2" [value]="newRequiredPlayers()" (input)="updateNewRequiredPlayers($event)">
+                    <button type="submit">Create</button>
+                </form>
+
+                <ol class="social-list">
+                    @for (rule of rules(); track rule.id) {
+                        <li>
+                            <label class="checkbox-row">
+                                <input type="checkbox" [checked]="rule.enabled" (change)="toggleRule(rule, $event)">
+                                <strong>{{ rule.ticket_key }}</strong>
+                            </label>
+                            <span>{{ rule.required_players }} players | {{ shortId(rule.id) }}</span>
+                        </li>
+                    } @empty {
+                        <li class="empty">No matchmaking rules</li>
+                    }
+                </ol>
+
+                <div class="actions">
+                    <button type="button" [disabled]="changedRules().size === 0" (click)="saveRules()">Save changes</button>
+                </div>
+            </section>
+        }
+    </section>
+</main>

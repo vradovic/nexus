@@ -1,0 +1,54 @@
+<main class="lobby-stage">
+    <section class="panel lobby-panel" aria-label="Matchmaking lobby">
+        <div class="panel-header">
+            <div>
+                <h2>Lobby</h2>
+                <p aria-live="polite">{{ matchmaking.message() }}</p>
+            </div>
+        </div>
+
+        <div class="queue-list">
+            @for (rule of matchmaking.rules(); track rule.id) {
+                <button
+                    class="queue-card"
+                    type="button"
+                    [class.active]="matchmaking.activeTicketKey() === rule.ticket_key"
+                    [disabled]="matchmaking.busy() || !!status().ticket || !!status().pending_match"
+                    (click)="join(rule.ticket_key)"
+                >
+                    <span>{{ rule.ticket_key }}</span>
+                    <small>{{ rule.required_players }} players</small>
+                </button>
+            } @empty {
+                <p class="empty">No enabled matchmaking rules</p>
+            }
+        </div>
+
+        <dl class="state-grid">
+            <div>
+                <dt>Queue</dt>
+                <dd>{{ matchmaking.activeTicketKey() || 'none' }}</dd>
+            </div>
+            <div>
+                <dt>Ticket</dt>
+                <dd>{{ shortId(status().ticket?.id) }}</dd>
+            </div>
+            <div>
+                <dt>Match</dt>
+                <dd>{{ shortId(status().pending_match?.id) }}</dd>
+            </div>
+            <div>
+                <dt>Expires</dt>
+                <dd>{{ expiresIn() }}</dd>
+            </div>
+        </dl>
+
+        <div class="actions">
+            <button type="button" [disabled]="matchmaking.busy() || !status().ticket || !!status().pending_match" (click)="leave()">Leave queue</button>
+        </div>
+
+        @if (matchmaking.error()) {
+            <p class="error-text">{{ matchmaking.error() }}</p>
+        }
+    </section>
+</main>

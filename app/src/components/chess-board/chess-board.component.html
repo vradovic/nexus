@@ -1,0 +1,18 @@
+<ngx-chess-board
+    #board
+    [size]="640"
+    [freeMode]="true"
+    [showCoords]="true"
+    [showLastMove]="true"
+    [showLegalMoves]="false"
+    [showActivePiece]="true"
+    [drawDisabled]="true"
+    [dragDisabled]="disabled() || awaitingServerMove()"
+    [lightDisabled]="disabled() || awaitingServerMove()"
+    [darkDisabled]="disabled() || awaitingServerMove()"
+    lightTileColor="#edf0e6"
+    darkTileColor="#789168"
+    sourcePointColor="#d6a629"
+    destinationPointColor="#d6a629"
+    (moveChange)="onMoveChange($event)"
+/>

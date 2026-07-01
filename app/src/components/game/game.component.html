@@ -1,0 +1,80 @@
+<main class="game-stage">
+    <section class="board-column">
+        <div class="game-meta">
+            <div>
+                <h2>Match</h2>
+                <p>{{ match()?.channel || 'none' }}</p>
+            </div>
+            <div>
+                <h2>Turn</h2>
+                <p>{{ realtime.turn() === 'w' ? 'White' : 'Black' }}</p>
+            </div>
+            <div>
+                <h2>Moves</h2>
+                <p>{{ realtime.moves() }}</p>
+            </div>
+        </div>
+
+        <app-chess-board
+            [position]="currentPosition()"
+            [turn]="realtime.turn()"
+            [orientation]="boardOrientation()"
+            [disabled]="!match() || realtime.status() !== 'connected'"
+            (move)="move($event)"
+        />
+
+        <div class="actions board-actions">
+            <button type="button" (click)="resetBoard()" [disabled]="!match()">Reset</button>
+            <button type="button" class="ghost-button" (click)="flipBoard()">Flip</button>
+        </div>
+    </section>
+
+    <aside class="side-panel">
+        <section class="panel compact-panel">
+            <h2>Opponent</h2>
+            <p class="mono">{{ shortId(opponentId()) }}</p>
+            <div class="actions stacked">
+                <button type="button" [disabled]="!canSendFriendRequest()" (click)="sendFriendRequest()">Add friend</button>
+                <button type="button" class="danger-button" [disabled]="!canBlockOpponent()" (click)="blockOpponent()">Block</button>
+            </div>
+            <p class="muted">{{ friendStatus() || blockStatus() }}</p>
+        </section>
+
+        <section class="panel compact-panel chat-panel">
+            <div class="panel-header">
+                <div>
+                    <h2>Chat</h2>
+                    <p>{{ chatStatus() }}</p>
+                </div>
+            </div>
+            <ol class="chat-list">
+                @for (message of chatMessages(); track message.id || $index) {
+                    <li>
+                        <div class="chat-meta">
+                            <span>{{ senderLabel(message.sender_id) }}</span>
+                            <span>{{ chatTime(message.created_at) }}</span>
+                        </div>
+                        <p>{{ message.body }}</p>
+                    </li>
+                } @empty {
+                    <li class="empty">No messages yet</li>
+                }
+            </ol>
+            <form class="chat-form" (submit)="sendChat($event)">
+                <input type="text" [value]="chatDraft()" (input)="updateChatDraft($event)" [disabled]="!match() || chatBusy()" autocomplete="off">
+                <button type="submit" [disabled]="!chatDraft().trim() || chatBusy()">Send</button>
+            </form>
+        </section>
+
+        <section class="panel compact-panel">
+            <h2>Events</h2>
+            <ol class="event-log">
+                @for (event of eventLog(); track $index) {
+                    <li>{{ event }}</li>
+                } @empty {
+                    <li class="empty">Waiting for game events</li>
+                }
+            </ol>
+        </section>
+    </aside>
+</main>

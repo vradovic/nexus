@@ -1,25 +1,40 @@
-<h2>Sign up</h2>
-<form class="auth-form" (submit)="onSubmit($event)">
-    <label>
-        Email:
-        <input type="email" [formField]="registerForm.email">
-    </label>
-    <label>
-        Username:
-        <input type="text" [formField]="registerForm.username">
-    </label>
-    <label>
-        First name:
-        <input type="text" [formField]="registerForm.firstName">
-    </label>
-    <label>
-        Last name:
-        <input type="text" [formField]="registerForm.lastName">
-    </label>
-    <label>
-        Password:
-        <input type="password" [formField]="registerForm.password">
-    </label>
-    <button type="submit">Sign up</button>
-</form>
-<a routerLink="/login">Log in</a>
+<section class="auth-page">
+    <div class="auth-shell">
+        <div class="auth-brand">
+            <span class="swatch" aria-hidden="true"></span>
+            <div>
+                <h1>Nexus Chess</h1>
+                <p>Create account</p>
+            </div>
+        </div>
+
+        <form class="auth-form" (submit)="onSubmit($event)">
+            <label>
+                Email
+                <input type="email" autocomplete="email" [value]="model().email" (input)="update('email', $event)" required>
+            </label>
+            <label>
+                Username
+                <input type="text" autocomplete="username" [value]="model().username" (input)="update('username', $event)" required>
+            </label>
+            <div class="register-fields">
+                <label>
+                    First
+                    <input type="text" autocomplete="given-name" [value]="model().firstName" (input)="update('firstName', $event)" required>
+                </label>
+                <label>
+                    Last
+                    <input type="text" autocomplete="family-name" [value]="model().lastName" (input)="update('lastName', $event)" required>
+                </label>
+            </div>
+            <label>
+                Password
+                <input type="password" autocomplete="new-password" [value]="model().password" (input)="update('password', $event)" required>
+            </label>
+            <button type="submit" [disabled]="busy()">Register</button>
+        </form>
+
+        <p class="auth-error" aria-live="polite">{{ error() }}</p>
+        <a routerLink="/login" class="link-button">Back to login</a>
+    </div>
+</section>

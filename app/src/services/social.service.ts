@@ -1,33 +1,82 @@
 import { HttpClient } from '@angular/common/http';
-import { effect, inject, Service, signal } from '@angular/core';
+import { inject, Injectable } from '@angular/core';
 import { environment } from '../environments/environment';
-import { AuthService } from './auth.service';
 import { Profile } from '../models/profile.model';
+import {
+    ActiveUserProfile,
+    BlockedUser,
+    ChatMessage,
+    Friend,
+    FriendRequestsResponse,
+} from '../models/social.model';
 
-@Service()
+@Injectable({ providedIn: 'root' })
 export class SocialService {
     private readonly http = inject(HttpClient);
-    private readonly authService = inject(AuthService);
-
-    readonly profile = signal<Profile | null>(null);
-
-    constructor() {
-        effect(() => {
-            const token = this.authService.accessToken();
-
-            if (!token) {
-                this.profile.set(null);
-                return;
-            }
-
-            this.me().subscribe({
-                next: profile => this.profile.set(profile),
-                error: () => console.error('Failed to fetch user profile.'),
-            });
-        });
-    }
 
     me() {
         return this.http.get<Profile>(`${environment.socialApiUrl}/me`);
+    }
+
+    user(id: string) {
+        return this.http.get<Profile>(`${environment.socialApiUrl}/users/${id}`);
+    }
+
+    friends() {
+        return this.http.get<Friend[]>(`${environment.socialApiUrl}/friends`);
+    }
+
+    friendRequests() {
+        return this.http.get<FriendRequestsResponse>(`${environment.socialApiUrl}/friend-requests`);
+    }
+
+    sendFriendRequest(recipientId: string) {
+        return this.http.post(`${environment.socialApiUrl}/friend-requests`, {
+            recipient_id: recipientId,
+        });
+    }
+
+    acceptFriendRequest(requestId: string) {
+        return this.http.post(`${environment.socialApiUrl}/friend-requests/${requestId}/accept`, {});
+    }
+
+    declineFriendRequest(requestId: string) {
+        return this.http.post(`${environment.socialApiUrl}/friend-requests/${requestId}/decline`, {});
+    }
+
+    blocks() {
+        return this.http.get<BlockedUser[]>(`${environment.socialApiUrl}/blocks`);
+    }
+
+    blockUser(blockedUserId: string) {
+        return this.http.post<BlockedUser>(`${environment.socialApiUrl}/blocks`, {
+            blocked_user_id: blockedUserId,
+        });
+    }
+
+    unblockUser(blockedUserId: string) {
+        return this.http.delete<void>(`${environment.socialApiUrl}/blocks/${blockedUserId}`);
+    }
+
+    chatMessages(channel: string, limit = 50) {
+        const params = new URLSearchParams({ channel, limit: String(limit) });
+
+        return this.http.get<ChatMessage[]>(`${environment.socialApiUrl}/chat/messages?${params}`);
+    }
+
+    sendChatMessage(channel: string, senderId: string, body: string) {
+        return this.http.post<ChatMessage>(`${environment.socialApiUrl}/chat/messages`, {
+            channel,
+            sender: senderId,
+            body,
+        });
+    }
+
+    adminChatMessages() {
+        return this.http.get<ChatMessage[]>(`${environment.socialApiUrl}/admin/chat/messages`);
+    }
+
+    activeUsers() {
+        return this.http.get<ActiveUserProfile[]>(`${environment.realtimeApiUrl}/admin/active-users`);
     }
 }

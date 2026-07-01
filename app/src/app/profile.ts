@@ -1,4 +1,4 @@
-import { Service } from '@angular/core';
+import { Injectable } from '@angular/core';
 
-@Service()
+@Injectable({ providedIn: 'root' })
 export class Profile {}

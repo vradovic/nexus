@@ -1,0 +1,66 @@
+<main class="content-stage">
+    <section class="panel wide-panel">
+        <div class="panel-header">
+            <div>
+                <h2>Friends</h2>
+                <p aria-live="polite">{{ status() }}</p>
+            </div>
+            <button type="button" class="ghost-button" [disabled]="busy()" (click)="load()">Refresh</button>
+        </div>
+
+        <div class="social-grid">
+            <section>
+                <h2>Friends</h2>
+                <ol class="social-list">
+                    @for (friend of friends(); track friend.friendship_id) {
+                        <li>{{ profileName(friend.first_name, friend.last_name, friend.friend_id) }}</li>
+                    } @empty {
+                        <li class="empty">No friends yet</li>
+                    }
+                </ol>
+            </section>
+
+            <section>
+                <h2>Requests</h2>
+                <ol class="social-list">
+                    @for (request of requests().incoming; track request.id) {
+                        <li>
+                            <span>{{ profileName(request.requester_first_name, request.requester_last_name, request.requester_id) }}</span>
+                            <div class="inline-actions">
+                                <button type="button" (click)="accept(request.id)">Accept</button>
+                                <button type="button" class="ghost-button" (click)="decline(request.id)">Decline</button>
+                            </div>
+                        </li>
+                    } @empty {
+                        <li class="empty">No incoming requests</li>
+                    }
+                </ol>
+            </section>
+
+            <section>
+                <h2>Sent</h2>
+                <ol class="social-list">
+                    @for (request of requests().outgoing; track request.id) {
+                        <li>{{ profileName(request.recipient_first_name, request.recipient_last_name, request.recipient_id) }}</li>
+                    } @empty {
+                        <li class="empty">No sent requests</li>
+                    }
+                </ol>
+            </section>
+
+            <section>
+                <h2>Blocked</h2>
+                <ol class="social-list">
+                    @for (blocked of blockedUsers(); track blocked.block_id) {
+                        <li>
+                            <span>{{ profileName(blocked.first_name, blocked.last_name, blocked.blocked_user_id) }}</span>
+                            <button type="button" class="ghost-button" (click)="unblock(blocked.blocked_user_id)">Unblock</button>
+                        </li>
+                    } @empty {
+                        <li class="empty">No blocked users</li>
+                    }
+                </ol>
+            </section>
+        </div>
+    </section>
+</main>

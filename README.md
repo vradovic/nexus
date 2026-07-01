@@ -18,43 +18,42 @@ Primeri postojećih rešenja:
 ## Tehnologije
 
 - Core aplikacija, backend - Rust
-- Skladište - SQL baza (Postgres)
-- Administratorska klijentska aplikacija - React
+- Skladište - SQL baza (Postgres), Redis
+- Message broker - NATS JetStream
+- Klijentska aplikacija - Angular
 
 ## Funkcionalni zahtevi
 
 ### Core aplikacija
 - **Upravljanje korisnicima**
   - Registracija i autentifikacija korisnika
-  - Korisnički profili i podešavanja
+  - Korisnički profili
   - Sistem prijatelja i blokiranje korisnika
 
-- **Sistem soba**
-  - Kreiranje javnih i privatnih soba
-  - Automatsko pronalaženje soba **(Matchmaking System)**
-  - Upravljanje kapacitetom soba
+- **Sistem soba i mečeva**
+  - Automatsko pronalaženje protivnika **(Matchmaking System)**
+  - Potvrđivanje pronađenog meča
+  - Upravljanje kanalima za komunikaciju u toku igre
 
 - **Chat sistem**
-  - Globalni, grupni i privatni chat
+  - Chat u okviru meča
   - Istorija poruka
-  - Moderacija sadržaja
+  - Osnovna moderacija sadržaja
 
 - **Real-time komunikacija**
   - WebSocket konekcije
   - Sinhronizacija stanja igre
   - Broadcast događaja
+  - Serverska validacija poteza kroz skriptu igre
 
 ### Administrativni panel
 - **Web interfejs**
-  - Pregled aktivnih korisnika i soba
-  - Moderacija chat-a
-  - Statistike servera
-  - Upravljanje korisničkim nalozima
+  - Pregled aktivnih korisnika
+  - Pregled chat poruka
+  - Upravljanje matchmaking pravilima
 
-## Proširenje za diplomski rad
-Postoje dve oblasti za koje smatram da bi značajno poboljšale funkcionalnosti i performanse ovog projekta:
+## Arhitektura
 
-1. **Integrisani skripting jezik** - pored osnovnih funkcionalnosti, ubacivanjem integrisanog skripting jezika u core aplikaciju bi omogućilo korisnicima da definišu dodatna pravila i logiku koja bi se izvršavala u mnogim delovima aplikacije (hooks).
-Takođe postoji i mogućnost pisanja pravila igre, tako da bi za neke jednostavnije turn-based igre, kao što je šah, bilo moguće i definisati celu logiku igrice kroz ova pravila (u teoriji je moguće za svaku igricu ali u realtime igrama gde je od velikog značaja brzina bi dedicated serveri bila bolja opcija).
-Rešenje za ovo bi moglo biti pisanje sopstvenog jednostavnog skripting jezika, ili upotrebom postojećeg (https://github.com/rhaiscript/rhai).
-2. **Horizontalno skaliranje servera i međusobna komunikacija** - ukoliko bi došlo do previsokog broja korisnika i soba, bilo bi zgodno implementirati rešenje za podizanje više instanci ovog servisa (na istom ili različitim serverima) i mehanizam komunikacije između njih (preko message brokera). Ovo bi moglo značajno da rastereti sistem, dok omogućuje visok broj klijenata.
+Projekat je organizovan kao skup manjih Rust servisa. `auth-service` upravlja nalozima i tokenima, `social-service` profilima, prijateljima, blokiranjem i chat-om, `matchmaking-service` redovima za pronalaženje mečeva, `realtime-service` WebSocket konekcijama i kanalima, a `game-service` pravilima igre kroz Rhai scripting jezik.
+
+Servisi međusobno komuniciraju preko NATS JetStream poruka. PostgreSQL se koristi za trajne podatke, Redis za privremeno matchmaking stanje, a Angular aplikacija predstavlja klijentsku aplikaciju za registraciju, lobby, igru, prijatelje, chat i administraciju.
