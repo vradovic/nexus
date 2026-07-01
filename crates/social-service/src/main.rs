@@ -22,7 +22,7 @@ const DEFAULT_BAD_WORDS_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/bad_w
 
 #[tokio::main]
 async fn main() {
-    dotenvy::dotenv().ok();
+    load_env();
 
     let pool = init_db().await;
     let nats_url =
@@ -64,4 +64,9 @@ async fn main() {
     println!("social-service listening on http://{}", addr);
 
     axum::serve(listener, app).await.expect("server failed");
+}
+
+fn load_env() {
+    dotenvy::dotenv().ok();
+    dotenvy::from_path(concat!(env!("CARGO_MANIFEST_DIR"), "/.env")).ok();
 }

@@ -1,7 +1,25 @@
 <h2>Sign up</h2>
-<form>
+<form class="auth-form" (submit)="onSubmit($event)">
     <label>
         Email:
-        <input type="email">
+        <input type="email" [formField]="registerForm.email">
     </label>
+    <label>
+        Username:
+        <input type="text" [formField]="registerForm.username">
+    </label>
+    <label>
+        First name:
+        <input type="text" [formField]="registerForm.firstName">
+    </label>
+    <label>
+        Last name:
+        <input type="text" [formField]="registerForm.lastName">
+    </label>
+    <label>
+        Password:
+        <input type="password" [formField]="registerForm.password">
+    </label>
+    <button type="submit">Sign up</button>
 </form>
+<a routerLink="/login">Log in</a>

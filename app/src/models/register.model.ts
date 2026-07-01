@@ -5,9 +5,3 @@ export interface RegisterModel {
     lastName: string;
     password: string;
 }
-
-export interface RegisterResponse {
-    id: string;
-    email: string;
-    username: string;
-}

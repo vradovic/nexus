@@ -2,7 +2,7 @@ import { computed, inject, Service, signal } from '@angular/core';
 import { LoginModel, LoginResponse } from '../models/login.model';
 import { HttpClient } from '@angular/common/http';
 import { environment } from '../environments/environment';
-import { RegisterModel, RegisterResponse } from '../models/register.model';
+import { RegisterModel } from '../models/register.model';
 import { tap } from 'rxjs';
 
 const TOKEN_KEY = 'access_token';
@@ -11,6 +11,7 @@ const TOKEN_KEY = 'access_token';
 export class AuthService {
     private readonly http = inject(HttpClient);
     private readonly token = signal<string | null>(sessionStorage.getItem(TOKEN_KEY));
+    readonly accessToken = this.token.asReadonly();
 
     isAuthenticated = computed(() => !!this.token());
 
@@ -26,7 +27,7 @@ export class AuthService {
     }
 
     register(data: RegisterModel) {
-        return this.http.post<RegisterResponse>(`${environment.authApiUrl}/register`, data);
+        return this.http.post<void>(`${environment.authApiUrl}/register`, data);
     }
 
     getToken() {

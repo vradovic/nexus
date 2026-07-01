@@ -1,7 +1,7 @@
 use axum::{
     Extension, Json, Router,
     extract::{Path, Query, Request, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::{delete, get, post},
@@ -19,6 +19,7 @@ use crate::{messaging, service};
 
 pub fn app_router(state: AppState) -> Router {
     let authenticated_routes = Router::new()
+        .route("/me", get(me))
         .route("/friends", get(list_friends))
         .route(
             "/chat/messages",
@@ -61,6 +62,16 @@ pub fn app_router(state: AppState) -> Router {
 
 async fn health() -> &'static str {
     "OK"
+}
+
+async fn me(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<UserProfile>, AppError> {
+    let user = authenticated_user(&headers, &state.jwt_secret)?;
+    let profile = service::get_user_profile(&state.user_profile_repository, user.user_id).await?;
+
+    Ok(Json(profile))
 }
 
 async fn get_user(

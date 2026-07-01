@@ -1,1 +1,8 @@
 /* You can add global styles to this file, and also import other style files */
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    align-items: start;
+    row-gap: .5em;
+    margin-bottom: 1em;
+}

@@ -1,7 +1,10 @@
 <h2>Home</h2>
 <p>Welcome to Nexus Chess! Useful links and actions:</p>
+@if (profile(); as profile) {
+<p>Logged in as: <b>{{ `${profile.firstName} ${profile.lastName}` }}</b></p>
+}
 <ul>
-    @if (this.showAuthLinks()) {
+    @if (!isAuthenticated()) {
     <li><a routerLink="/login">Log in</a></li>
     <li><a routerLink="/register">Sign up</a></li>
     } @else {

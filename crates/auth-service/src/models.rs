@@ -3,6 +3,7 @@ use sqlx::FromRow;
 use uuid::Uuid;
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RegisterRequest {
     pub email: String,
     pub username: String,
@@ -30,13 +31,6 @@ pub struct AuthAccountWithPassword {
     pub email: String,
     pub password_hash: String,
     pub role: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct RegisterResponse {
-    pub id: Uuid,
-    pub email: String,
-    pub username: String,
 }
 
 #[derive(Debug, Serialize)]

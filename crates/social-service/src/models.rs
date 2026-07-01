@@ -3,6 +3,7 @@ use sqlx::FromRow;
 use uuid::Uuid;
 
 #[derive(Debug, Serialize, FromRow)]
+#[serde(rename_all = "camelCase")]
 pub struct UserProfile {
     pub id: Uuid,
     pub first_name: String,

@@ -8,7 +8,7 @@ use nexus_shared::AppError;
 use tower_http::cors::CorsLayer;
 
 use crate::app_state::AppState;
-use crate::models::{LoginRequest, LoginResponse, RegisterRequest, RegisterResponse};
+use crate::models::{LoginRequest, LoginResponse, RegisterRequest};
 use crate::service;
 
 pub fn app_router(state: AppState) -> Router {
@@ -27,11 +27,10 @@ async fn health() -> &'static str {
 async fn register(
     State(state): State<AppState>,
     Json(payload): Json<RegisterRequest>,
-) -> Result<(StatusCode, Json<RegisterResponse>), AppError> {
-    let response =
-        service::register_user(&state.auth_repository, &state.nats_client, payload).await?;
+) -> Result<StatusCode, AppError> {
+    service::register_user(&state.auth_repository, &state.nats_client, payload).await?;
 
-    Ok((StatusCode::CREATED, Json(response)))
+    Ok(StatusCode::CREATED)
 }
 
 async fn login(

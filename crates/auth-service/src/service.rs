@@ -10,14 +10,14 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
 use crate::messaging::USER_REGISTERED_SUBJECT;
-use crate::models::{LoginRequest, LoginResponse, RegisterRequest, RegisterResponse};
+use crate::models::{LoginRequest, LoginResponse, RegisterRequest};
 use crate::repository::AuthRepository;
 
 pub async fn register_user(
     auth_repository: &AuthRepository,
     nats_client: &Client,
     payload: RegisterRequest,
-) -> Result<RegisterResponse, AppError> {
+) -> Result<(), AppError> {
     validate_registration(&payload)?;
 
     let password_hash = hash_password(&payload.password)?;
@@ -35,11 +35,7 @@ pub async fn register_user(
 
     publish_user_registered_event(nats_client, &auth_account, &payload).await?;
 
-    Ok(RegisterResponse {
-        id: auth_account.id,
-        email: auth_account.email,
-        username: auth_account.username,
-    })
+    Ok(())
 }
 
 pub async fn login_user(
